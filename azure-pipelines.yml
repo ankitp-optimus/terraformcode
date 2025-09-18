@@ -161,6 +161,7 @@ stages:
           
           - task: AzureCLI@2
             displayName: 'Deploy Infrastructure with Terraform'
+            name: 'TerraformDeploy'
             inputs:
               azureSubscription: $(azureServiceConnection)
               scriptType: 'bash'
@@ -369,7 +370,6 @@ stages:
                 echo "Infrastructure deployed successfully!"
                 echo "VM Public IP: $VM_PUBLIC_IP"
                 echo "SSH Connection: $SSH_CONNECTION"
-            name: 'TerraformDeploy'
 
           - task: PublishPipelineArtifact@1
             displayName: 'Publish Terraform Outputs'
@@ -398,6 +398,13 @@ stages:
         echo "Available stage dependencies:"
         echo "Deploy stage status: $(stageDependencies.Deploy.result)"
         echo "DeployInfrastructure job status: $(stageDependencies.Deploy.DeployInfrastructure.result)"
+        echo
+        echo "Checking all available outputs from Deploy.DeployInfrastructure:"
+        echo "All outputs keys: $(stageDependencies.Deploy.DeployInfrastructure.outputs)"
+        echo
+        echo "Trying alternative variable paths:"
+        echo "Alternative vm_public_ip: $[ stageDependencies.Deploy.DeployInfrastructure.outputs['vm_public_ip'] ]"
+        echo "Alternative ssh_connection: $[ stageDependencies.Deploy.DeployInfrastructure.outputs['ssh_connection'] ]"
         echo "======================================="
         
         echo "=== DEBUGGING PIPELINE VARIABLES ==="
@@ -435,13 +442,25 @@ stages:
           # Source the variables if pipeline variables are empty
           if [ -z "$(vm_public_ip)" ] || [ "$(vm_public_ip)" = "" ]; then
             echo "Pipeline variables are empty, loading from artifact..."
-            source $(Agent.TempDirectory)/terraform-outputs/variables.txt
+            
+            # Parse variables more safely (avoid issues with spaces in SSH connection)
+            VM_PUBLIC_IP_ARTIFACT=$(grep "^vm_public_ip=" $(Agent.TempDirectory)/terraform-outputs/variables.txt | cut -d'=' -f2-)
+            VM_PRIVATE_IP_ARTIFACT=$(grep "^vm_private_ip=" $(Agent.TempDirectory)/terraform-outputs/variables.txt | cut -d'=' -f2-)
+            SSH_CONNECTION_ARTIFACT=$(grep "^ssh_connection=" $(Agent.TempDirectory)/terraform-outputs/variables.txt | cut -d'=' -f2-)
+            RESOURCE_GROUP_ARTIFACT=$(grep "^resource_group_name=" $(Agent.TempDirectory)/terraform-outputs/variables.txt | cut -d'=' -f2-)
+            VM_NAME_ARTIFACT=$(grep "^vm_name=" $(Agent.TempDirectory)/terraform-outputs/variables.txt | cut -d'=' -f2-)
+            
+            echo "Parsed from artifact:"
+            echo "VM Public IP: '$VM_PUBLIC_IP_ARTIFACT'"
+            echo "SSH Connection: '$SSH_CONNECTION_ARTIFACT'"
+            echo "Resource Group: '$RESOURCE_GROUP_ARTIFACT'"
+            echo "VM Name: '$VM_NAME_ARTIFACT'"
             
             echo "Setting task variables from artifact:"
-            echo "##vso[task.setvariable variable=vm_public_ip_fallback]$vm_public_ip"
-            echo "##vso[task.setvariable variable=ssh_connection_fallback]$ssh_connection"
-            echo "##vso[task.setvariable variable=resource_group_name_fallback]$resource_group_name"
-            echo "##vso[task.setvariable variable=vm_name_fallback]$vm_name"
+            echo "##vso[task.setvariable variable=vm_public_ip_fallback]$VM_PUBLIC_IP_ARTIFACT"
+            echo "##vso[task.setvariable variable=ssh_connection_fallback]$SSH_CONNECTION_ARTIFACT"
+            echo "##vso[task.setvariable variable=resource_group_name_fallback]$RESOURCE_GROUP_ARTIFACT"
+            echo "##vso[task.setvariable variable=vm_name_fallback]$VM_NAME_ARTIFACT"
           else
             echo "Pipeline variables are available, using them..."
           fi
@@ -469,7 +488,13 @@ stages:
           echo "✅ Using pipeline variables"
         elif [ -n "$(vm_public_ip_fallback)" ] && [ "$(vm_public_ip_fallback)" != "" ]; then
           VM_IP="$(vm_public_ip_fallback)"
-          SSH_CONN="$(ssh_connection_fallback)"
+          # Construct SSH connection from fallback variables if not available
+          if [ -n "$(ssh_connection_fallback)" ] && [ "$(ssh_connection_fallback)" != "" ]; then
+            SSH_CONN="$(ssh_connection_fallback)"
+          else
+            # Construct SSH connection using admin username and fallback IP
+            SSH_CONN="ssh $(admin_username)@$(vm_public_ip_fallback)"
+          fi
           echo "✅ Using fallback variables from artifact"
         else
           echo "❌ ERROR: No valid variables found!"
