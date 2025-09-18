@@ -20,7 +20,10 @@ variables:
   # Pipeline Configuration
   terraform_version: '1.5.0'
   python_version: '3.11'
-  azureServiceConnection: 'azure-service-connection'  # Update with your service connection name
+  
+  # Azure Service Connection Configuration
+  # Service connection 'Ankitdevops' is configured in Azure DevOps
+  azureServiceConnection: 'Ankitdevops'
   
   # Application Configuration
   app_name: 'python-flask-app'

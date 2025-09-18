@@ -1,27 +1,40 @@
 # Azure DevOps Pipeline Setup Guide
 
+## 🚨 CRITICAL FIRST STEP: Service Connection Setup
+
+**The pipeline WILL FAIL without this setup!** You must create an Azure service connection first.
+
+### Quick Setup Instructions:
+1. **Azure DevOps** → **Project Settings** → **Service connections**
+2. **New service connection** → **Azure Resource Manager** → **Service principal (automatic)**
+3. Select your Azure subscription and name the connection
+4. Update `azureServiceConnection` variable in `azure-pipelines.yml`
+
+📋 **Detailed Instructions**: See `SERVICE_CONNECTION_SETUP.md` for step-by-step guide.
+
 ## Prerequisites
 
-Before using this Azure DevOps pipeline, ensure you have the following configured:
+### 1. Azure Service Connection (REQUIRED)
+⚠️ **Without this, the pipeline cannot access Azure resources**
 
-### 1. Azure Service Connection
 1. Go to your Azure DevOps project
-2. Navigate to Project Settings → Service connections
-3. Create a new Azure Resource Manager service connection
-4. Choose "Service principal (automatic)" 
-5. Select your Azure subscription and resource group scope
-6. Name it `azure-service-connection` (or update the variable in pipeline)
+2. Navigate to **Project Settings** → **Service connections**
+3. Create a new **Azure Resource Manager** service connection
+4. Choose **"Service principal (automatic)"** 
+5. Select your Azure subscription 
+6. Name it (e.g., `azure-terraform-connection`)
+7. ✅ Check **"Grant access permission to all pipelines"**
 
-### 2. Pipeline Variables
-Update these variables in the pipeline YAML file or in Azure DevOps:
+### 2. Update Pipeline Variables (REQUIRED)
+Edit `azure-pipelines.yml` and update:
 
 ```yaml
-variables:
-  azureServiceConnection: 'your-service-connection-name'  # Update this
-  location: 'East US'  # Choose your preferred Azure region
-  resource_group_prefix: 'rg-flask-app'  # Customize as needed
-  vm_name_prefix: 'vm-flask'  # Customize as needed
-  admin_username: 'azureuser'  # VM admin username
+# Line ~23 in azure-pipelines.yml
+azureServiceConnection: 'YOUR_ACTUAL_CONNECTION_NAME'  # ⚠️ MUST UPDATE
+location: 'East US'  # Choose your preferred Azure region
+resource_group_prefix: 'rg-flask-app'  # Customize as needed
+vm_name_prefix: 'vm-flask'  # Customize as needed
+admin_username: 'azureuser'  # VM admin username
 ```
 
 ### 3. Repository Structure

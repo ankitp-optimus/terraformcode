@@ -1,15 +1,2 @@
-# Terraform and provider configuration
-terraform {
-  required_providers {
-    azurerm = {
-      source  = "hashicorp/azurerm"
-      version = "~> 3.0"
-    }
-  }
-
-  required_version = ">= 1.3.0"
-}
-
-provider "azurerm" {
-  features {}
-}
+# Provider configuration is now in backend.tf
+# This file is kept for reference but not actively used

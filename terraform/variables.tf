@@ -45,3 +45,33 @@ variable "github_token" {
   default     = ""
   sensitive   = true
 }
+
+# Azure Authentication Variables
+# These are automatically provided by Azure DevOps service connection
+variable "client_id" {
+  description = "Azure Service Principal Client ID"
+  type        = string
+  default     = ""
+  sensitive   = true
+}
+
+variable "client_secret" {
+  description = "Azure Service Principal Client Secret"
+  type        = string
+  default     = ""
+  sensitive   = true
+}
+
+variable "tenant_id" {
+  description = "Azure Tenant ID"
+  type        = string
+  default     = ""
+  sensitive   = true
+}
+
+variable "subscription_id" {
+  description = "Azure Subscription ID"
+  type        = string
+  default     = ""
+  sensitive   = true
+}
