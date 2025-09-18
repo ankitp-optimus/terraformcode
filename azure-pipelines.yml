@@ -1,0 +1,372 @@
+# Azure DevOps Pipeline for Python Flask App Deployment
+# This pipeline creates SSH keys, provisions infrastructure, and deploys the application
+
+trigger:
+  branches:
+    include:
+    - main
+    - develop
+  paths:
+    exclude:
+    - README.md
+    - docs/*
+
+pr:
+  branches:
+    include:
+    - main
+
+variables:
+  # Pipeline Configuration
+  terraform_version: '1.5.0'
+  python_version: '3.11'
+  azureServiceConnection: 'azure-service-connection'  # Update with your service connection name
+  
+  # Application Configuration
+  app_name: 'python-flask-app'
+  resource_group_prefix: 'rg-flask-app'
+  vm_name_prefix: 'vm-flask'
+  location: 'East US'
+  
+  # SSH Configuration
+  ssh_key_name: 'flask-app-key'
+  admin_username: 'azureuser'
+
+stages:
+- stage: 'Validate'
+  displayName: 'Validate and Prepare'
+  jobs:
+  - job: 'ValidateCode'
+    displayName: 'Validate Code and Configuration'
+    pool:
+      vmImage: 'ubuntu-latest'
+    
+    steps:
+    - checkout: self
+      displayName: 'Checkout Repository'
+    
+    - task: AzureCLI@2
+      displayName: 'Install Terraform and Generate SSH Keys'
+      inputs:
+        azureSubscription: $(azureServiceConnection)
+        scriptType: 'bash'
+        scriptLocation: 'inlineScript'
+        inlineScript: |
+          # Install Terraform
+          echo "Installing Terraform $(terraform_version)..."
+          wget -O- https://apt.releases.hashicorp.com/gpg | gpg --dearmor | sudo tee /usr/share/keyrings/hashicorp-archive-keyring.gpg
+          echo "deb [signed-by=/usr/share/keyrings/hashicorp-archive-keyring.gpg] https://apt.releases.hashicorp.com $(lsb_release -cs) main" | sudo tee /etc/apt/sources.list.d/hashicorp.list
+          sudo apt update && sudo apt install terraform
+          
+          terraform version
+          
+          echo "Generating SSH key pair..."
+          
+          # Create .ssh directory if it doesn't exist
+          mkdir -p ~/.ssh
+          
+          # Generate SSH key pair
+          ssh-keygen -t rsa -b 4096 -C "$(app_name)-$(Build.BuildId)" -f ~/.ssh/$(ssh_key_name) -N ""
+          
+          # Read the public key
+          SSH_PUBLIC_KEY=$(cat ~/.ssh/$(ssh_key_name).pub)
+          SSH_PRIVATE_KEY=$(cat ~/.ssh/$(ssh_key_name))
+          
+          echo "SSH key pair generated successfully"
+          echo "Public key: $SSH_PUBLIC_KEY"
+          
+          # Set pipeline variables for use in later stages
+          echo "##vso[task.setvariable variable=ssh_public_key;isOutput=true;isSecret=false]$SSH_PUBLIC_KEY"
+          echo "##vso[task.setvariable variable=ssh_private_key;isOutput=true;isSecret=true]$SSH_PRIVATE_KEY"
+          
+          # Save keys as pipeline artifacts
+          echo "$SSH_PUBLIC_KEY" > $(Agent.TempDirectory)/ssh_public_key.pub
+          echo "$SSH_PRIVATE_KEY" > $(Agent.TempDirectory)/ssh_private_key
+          
+          # Set file permissions
+          chmod 600 $(Agent.TempDirectory)/ssh_private_key
+          chmod 644 $(Agent.TempDirectory)/ssh_public_key.pub
+          
+          echo "SSH keys saved to artifacts"
+      name: 'PrepareEnvironment'
+    
+    - task: PublishPipelineArtifact@1
+      displayName: 'Publish SSH Keys'
+      inputs:
+        targetPath: '$(Agent.TempDirectory)'
+        artifact: 'ssh-keys'
+        publishLocation: 'pipeline'
+    
+    - script: |
+        cd terraform
+        terraform fmt -check -recursive
+        terraform init -backend=false
+        terraform validate
+      displayName: 'Validate Terraform Configuration'
+    
+    - task: UsePythonVersion@0
+      displayName: 'Setup Python'
+      inputs:
+        versionSpec: $(python_version)
+    
+    - script: |
+        cd sample-python-app
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        python -m py_compile app.py
+      displayName: 'Validate Python Application'
+
+- stage: 'Deploy'
+  displayName: 'Deploy Infrastructure and Application'
+  dependsOn: 'Validate'
+  condition: and(succeeded(), eq(variables['Build.SourceBranch'], 'refs/heads/main'))
+  variables:
+    ssh_public_key: $[ stageDependencies.Validate.ValidateCode.outputs['PrepareEnvironment.ssh_public_key'] ]
+    ssh_private_key: $[ stageDependencies.Validate.ValidateCode.outputs['PrepareEnvironment.ssh_private_key'] ]
+  
+  jobs:
+  - deployment: 'DeployInfrastructure'
+    displayName: 'Deploy Azure Infrastructure'
+    pool:
+      vmImage: 'ubuntu-latest'
+    environment: 'production'
+    
+    strategy:
+      runOnce:
+        deploy:
+          steps:
+          - checkout: self
+            displayName: 'Checkout Repository'
+          
+          - task: DownloadPipelineArtifact@2
+            displayName: 'Download SSH Keys'
+            inputs:
+              buildType: 'current'
+              artifactName: 'ssh-keys'
+              targetPath: '$(Agent.TempDirectory)/ssh-keys'
+          
+          - task: AzureCLI@2
+            displayName: 'Deploy Infrastructure with Terraform'
+            inputs:
+              azureSubscription: $(azureServiceConnection)
+              scriptType: 'bash'
+              scriptLocation: 'inlineScript'
+              inlineScript: |
+                # Install Terraform
+                echo "Installing Terraform..."
+                wget -O- https://apt.releases.hashicorp.com/gpg | gpg --dearmor | sudo tee /usr/share/keyrings/hashicorp-archive-keyring.gpg
+                echo "deb [signed-by=/usr/share/keyrings/hashicorp-archive-keyring.gpg] https://apt.releases.hashicorp.com $(lsb_release -cs) main" | sudo tee /etc/apt/sources.list.d/hashicorp.list
+                sudo apt update && sudo apt install terraform
+                
+                echo "Starting Terraform deployment..."
+                
+                # Set unique resource names
+                UNIQUE_SUFFIX=$(echo $(Build.BuildId) | tail -c 5)
+                RESOURCE_GROUP_NAME="$(resource_group_prefix)-$UNIQUE_SUFFIX"
+                VM_NAME="$(vm_name_prefix)-$UNIQUE_SUFFIX"
+                
+                echo "Resource Group: $RESOURCE_GROUP_NAME"
+                echo "VM Name: $VM_NAME"
+                echo "SSH Public Key: $(ssh_public_key)"
+                
+                cd terraform
+                
+                # Initialize Terraform
+                terraform init
+                
+                # Plan deployment
+                terraform plan \
+                  -var="resource_group_name=$RESOURCE_GROUP_NAME" \
+                  -var="location=$(location)" \
+                  -var="vm_name=$VM_NAME" \
+                  -var="admin_username=$(admin_username)" \
+                  -var="admin_ssh_key=$(ssh_public_key)" \
+                  -var="github_repo_url=$(Build.Repository.Uri)" \
+                  -var="app_name=$(app_name)" \
+                  -var="github_token=" \
+                  -out=tfplan
+                
+                # Apply deployment
+                terraform apply -auto-approve tfplan
+                
+                # Get outputs
+                VM_PUBLIC_IP=$(terraform output -raw vm_public_ip)
+                VM_PRIVATE_IP=$(terraform output -raw vm_private_ip)
+                SSH_CONNECTION=$(terraform output -raw ssh_connection)
+                
+                echo "##vso[task.setvariable variable=vm_public_ip;isOutput=true]$VM_PUBLIC_IP"
+                echo "##vso[task.setvariable variable=vm_private_ip;isOutput=true]$VM_PRIVATE_IP"
+                echo "##vso[task.setvariable variable=ssh_connection;isOutput=true]$SSH_CONNECTION"
+                echo "##vso[task.setvariable variable=resource_group_name;isOutput=true]$RESOURCE_GROUP_NAME"
+                echo "##vso[task.setvariable variable=vm_name;isOutput=true]$VM_NAME"
+                
+                echo "Infrastructure deployed successfully!"
+                echo "VM Public IP: $VM_PUBLIC_IP"
+                echo "SSH Connection: $SSH_CONNECTION"
+            name: 'TerraformDeploy'
+
+- stage: 'Validate_Deployment'
+  displayName: 'Validate Application Deployment'
+  dependsOn: 'Deploy'
+  variables:
+    vm_public_ip: $[ stageDependencies.Deploy.DeployInfrastructure.outputs['TerraformDeploy.vm_public_ip'] ]
+    ssh_connection: $[ stageDependencies.Deploy.DeployInfrastructure.outputs['TerraformDeploy.ssh_connection'] ]
+    resource_group_name: $[ stageDependencies.Deploy.DeployInfrastructure.outputs['TerraformDeploy.resource_group_name'] ]
+    vm_name: $[ stageDependencies.Deploy.DeployInfrastructure.outputs['TerraformDeploy.vm_name'] ]
+  
+  jobs:
+  - job: 'TestApplication'
+    displayName: 'Test Application and SSH Access'
+    pool:
+      vmImage: 'ubuntu-latest'
+    
+    steps:
+    - task: DownloadPipelineArtifact@2
+      displayName: 'Download SSH Keys'
+      inputs:
+        buildType: 'current'
+        artifactName: 'ssh-keys'
+        targetPath: '$(Agent.TempDirectory)/ssh-keys'
+    
+    - script: |
+        echo "Waiting for VM setup to complete..."
+        echo "VM Public IP: $(vm_public_ip)"
+        echo "SSH Connection: $(ssh_connection)"
+        
+        # Wait for VM extension to complete setup
+        sleep 120
+      displayName: 'Wait for VM Setup'
+    
+    - script: |
+        echo "Testing application endpoints..."
+        VM_IP="$(vm_public_ip)"
+        
+        # Test application health (with retries)
+        for i in {1..20}; do
+          echo "Attempt $i/20: Testing health endpoint..."
+          if curl -f -s "http://$VM_IP/health"; then
+            echo "✅ Application is healthy!"
+            break
+          else
+            echo "⏳ Application not ready yet, waiting 30 seconds..."
+            sleep 30
+          fi
+          
+          if [ $i -eq 20 ]; then
+            echo "❌ Application failed to start within 10 minutes"
+            exit 1
+          fi
+        done
+        
+        echo "Testing other endpoints..."
+        
+        # Test home page
+        echo "Testing home page..."
+        curl -f -s "http://$VM_IP/" > /dev/null && echo "✅ Home page OK" || echo "❌ Home page failed"
+        
+        # Test API endpoints
+        echo "Testing API endpoints..."
+        curl -f -s "http://$VM_IP/api/info" > /dev/null && echo "✅ API info OK" || echo "❌ API info failed"
+        curl -f -s "http://$VM_IP/api/hello?name=AzureDevOps" > /dev/null && echo "✅ API hello OK" || echo "❌ API hello failed"
+        
+        echo "✅ All endpoint tests completed!"
+      displayName: 'Test Application Endpoints'
+    
+    - script: |
+        echo "Testing SSH access..."
+        
+        # Setup SSH key
+        mkdir -p ~/.ssh
+        cp $(Agent.TempDirectory)/ssh-keys/ssh_private_key ~/.ssh/id_rsa
+        chmod 600 ~/.ssh/id_rsa
+        
+        VM_IP="$(vm_public_ip)"
+        
+        # Add VM to known hosts
+        ssh-keyscan -H $VM_IP >> ~/.ssh/known_hosts
+        
+        # Test SSH connection
+        echo "Testing SSH connection to $(admin_username)@$VM_IP..."
+        ssh -o ConnectTimeout=30 -o StrictHostKeyChecking=no $(admin_username)@$VM_IP "echo 'SSH connection successful!' && hostname && uptime"
+        
+        # Test application status on VM
+        echo "Checking application status on VM..."
+        ssh -o ConnectTimeout=30 $(admin_username)@$VM_IP "sudo systemctl status nginx --no-pager -l"
+        ssh -o ConnectTimeout=30 $(admin_username)@$VM_IP "sudo supervisorctl status $(app_name)"
+        
+        echo "✅ SSH access test completed successfully!"
+      displayName: 'Test SSH Access'
+    
+    - task: AzureCLI@2
+      displayName: 'Generate Deployment Summary'
+      inputs:
+        azureSubscription: $(azureServiceConnection)
+        scriptType: 'bash'
+        scriptLocation: 'inlineScript'
+        inlineScript: |
+          echo "## 🚀 Deployment Summary" >> $(Agent.TempDirectory)/deployment_summary.md
+          echo "" >> $(Agent.TempDirectory)/deployment_summary.md
+          echo "### 📋 Infrastructure Details" >> $(Agent.TempDirectory)/deployment_summary.md
+          echo "- **Resource Group**: $(resource_group_name)" >> $(Agent.TempDirectory)/deployment_summary.md
+          echo "- **VM Name**: $(vm_name)" >> $(Agent.TempDirectory)/deployment_summary.md
+          echo "- **VM Public IP**: $(vm_public_ip)" >> $(Agent.TempDirectory)/deployment_summary.md
+          echo "- **Location**: $(location)" >> $(Agent.TempDirectory)/deployment_summary.md
+          echo "" >> $(Agent.TempDirectory)/deployment_summary.md
+          echo "### 🔗 Application URLs" >> $(Agent.TempDirectory)/deployment_summary.md
+          echo "- **Application Home**: http://$(vm_public_ip)/" >> $(Agent.TempDirectory)/deployment_summary.md
+          echo "- **Health Check**: http://$(vm_public_ip)/health" >> $(Agent.TempDirectory)/deployment_summary.md
+          echo "- **System Status**: http://$(vm_public_ip)/status" >> $(Agent.TempDirectory)/deployment_summary.md
+          echo "- **API Info**: http://$(vm_public_ip)/api/info" >> $(Agent.TempDirectory)/deployment_summary.md
+          echo "" >> $(Agent.TempDirectory)/deployment_summary.md
+          echo "### 🔑 SSH Access" >> $(Agent.TempDirectory)/deployment_summary.md
+          echo "```bash" >> $(Agent.TempDirectory)/deployment_summary.md
+          echo "ssh $(admin_username)@$(vm_public_ip)" >> $(Agent.TempDirectory)/deployment_summary.md
+          echo "```" >> $(Agent.TempDirectory)/deployment_summary.md
+          echo "" >> $(Agent.TempDirectory)/deployment_summary.md
+          echo "### 📊 Pipeline Information" >> $(Agent.TempDirectory)/deployment_summary.md
+          echo "- **Build ID**: $(Build.BuildId)" >> $(Agent.TempDirectory)/deployment_summary.md
+          echo "- **Build Number**: $(Build.BuildNumber)" >> $(Agent.TempDirectory)/deployment_summary.md
+          echo "- **Source Branch**: $(Build.SourceBranch)" >> $(Agent.TempDirectory)/deployment_summary.md
+          echo "- **Deployment Time**: $(date)" >> $(Agent.TempDirectory)/deployment_summary.md
+          
+          echo "Deployment completed successfully! 🎉"
+          cat $(Agent.TempDirectory)/deployment_summary.md
+    
+    - task: PublishPipelineArtifact@1
+      displayName: 'Publish Deployment Summary'
+      inputs:
+        targetPath: '$(Agent.TempDirectory)/deployment_summary.md'
+        artifact: 'deployment-summary'
+        publishLocation: 'pipeline'
+
+- stage: 'Cleanup'
+  displayName: 'Cleanup Resources (Optional)'
+  dependsOn: ['Deploy', 'Validate_Deployment']
+  condition: and(succeeded(), eq(variables['cleanup_resources'], 'true'))
+  variables:
+    resource_group_name: $[ stageDependencies.Deploy.DeployInfrastructure.outputs['TerraformDeploy.resource_group_name'] ]
+  
+  jobs:
+  - job: 'CleanupInfrastructure'
+    displayName: 'Cleanup Azure Resources'
+    pool:
+      vmImage: 'ubuntu-latest'
+    
+    steps:
+    - checkout: self
+      displayName: 'Checkout Repository'
+    
+    - task: AzureCLI@2
+      displayName: 'Destroy Infrastructure'
+      inputs:
+        azureSubscription: $(azureServiceConnection)
+        scriptType: 'bash'
+        scriptLocation: 'inlineScript'
+        inlineScript: |
+          echo "Starting infrastructure cleanup..."
+          echo "Resource Group: $(resource_group_name)"
+          
+          # Delete the entire resource group (faster than Terraform destroy)
+          az group delete --name "$(resource_group_name)" --yes --no-wait
+          
+          echo "✅ Cleanup initiated successfully!"

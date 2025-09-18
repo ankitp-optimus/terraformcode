@@ -1,0 +1,147 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="hero-section">
+    <div class="container">
+        <div class="row">
+            <div class="col-lg-8 mx-auto text-center">
+                <h1 class="display-4 fw-bold mb-4">
+                    <i class="fas fa-rocket"></i> Welcome to Python Flask on Azure!
+                </h1>
+                <p class="lead mb-4">
+                    This application demonstrates a complete CI/CD pipeline deploying Python Flask applications 
+                    to Azure VMs using Terraform and GitHub Actions.
+                </p>
+                <div class="d-grid gap-2 d-md-flex justify-content-md-center">
+                    <a href="{{ url_for('status') }}" class="btn btn-light btn-lg me-md-2">
+                        <i class="fas fa-chart-line"></i> View Status
+                    </a>
+                    <a href="{{ url_for('about') }}" class="btn btn-outline-light btn-lg">
+                        <i class="fas fa-info-circle"></i> Learn More
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<section class="py-5">
+    <div class="container">
+        <div class="row">
+            <div class="col-lg-12 text-center mb-5">
+                <h2 class="fw-bold">Features & Capabilities</h2>
+                <p class="text-muted">This demo application showcases modern DevOps practices</p>
+            </div>
+        </div>
+        <div class="row g-4">
+            <div class="col-md-4">
+                <div class="card h-100 text-center p-4">
+                    <div class="feature-icon">
+                        <i class="fas fa-code"></i>
+                    </div>
+                    <h5>Python Flask Backend</h5>
+                    <p class="text-muted">Modern web application built with Flask framework, featuring RESTful APIs and health monitoring.</p>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card h-100 text-center p-4">
+                    <div class="feature-icon">
+                        <i class="fas fa-server"></i>
+                    </div>
+                    <h5>Nginx Reverse Proxy</h5>
+                    <p class="text-muted">High-performance web server configured as reverse proxy with load balancing and caching.</p>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card h-100 text-center p-4">
+                    <div class="feature-icon">
+                        <i class="fas fa-cloud"></i>
+                    </div>
+                    <h5>Azure VM Deployment</h5>
+                    <p class="text-muted">Infrastructure as Code using Terraform for reproducible and scalable deployments.</p>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card h-100 text-center p-4">
+                    <div class="feature-icon">
+                        <i class="fas fa-sync-alt"></i>
+                    </div>
+                    <h5>CI/CD Pipeline</h5>
+                    <p class="text-muted">Automated deployment pipeline using GitHub Actions for continuous integration and delivery.</p>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card h-100 text-center p-4">
+                    <div class="feature-icon">
+                        <i class="fas fa-shield-alt"></i>
+                    </div>
+                    <h5>Security Best Practices</h5>
+                    <p class="text-muted">SSH key authentication, firewall configuration, and secure service management.</p>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card h-100 text-center p-4">
+                    <div class="feature-icon">
+                        <i class="fas fa-chart-bar"></i>
+                    </div>
+                    <h5>Monitoring & Health Checks</h5>
+                    <p class="text-muted">Built-in health endpoints and system monitoring for operational visibility.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<section class="py-5 bg-light">
+    <div class="container">
+        <div class="row">
+            <div class="col-lg-8 mx-auto">
+                <div class="card">
+                    <div class="card-body p-4">
+                        <h3 class="card-title text-center mb-4">
+                            <i class="fas fa-terminal"></i> Quick API Test
+                        </h3>
+                        <p class="text-center text-muted mb-4">Try our REST API endpoints:</p>
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <button class="btn btn-outline-primary w-100" onclick="testAPI('/health')">
+                                    <i class="fas fa-heartbeat"></i> Health Check
+                                </button>
+                            </div>
+                            <div class="col-md-6">
+                                <button class="btn btn-outline-success w-100" onclick="testAPI('/api/info')">
+                                    <i class="fas fa-info"></i> System Info
+                                </button>
+                            </div>
+                        </div>
+                        <div id="apiResult" class="mt-3" style="display: none;">
+                            <h6>API Response:</h6>
+                            <pre class="bg-dark text-light p-3 rounded" id="apiResponse"></pre>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function testAPI(endpoint) {
+    const resultDiv = document.getElementById('apiResult');
+    const responseDiv = document.getElementById('apiResponse');
+    
+    fetch(endpoint)
+        .then(response => response.json())
+        .then(data => {
+            responseDiv.textContent = JSON.stringify(data, null, 2);
+            resultDiv.style.display = 'block';
+        })
+        .catch(error => {
+            responseDiv.textContent = 'Error: ' + error.message;
+            resultDiv.style.display = 'block';
+        });
+}
+</script>
+{% endblock %}

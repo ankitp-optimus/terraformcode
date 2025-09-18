@@ -1,0 +1,123 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="py-5">
+    <div class="container">
+        <div class="row">
+            <div class="col-lg-8 mx-auto">
+                <h1 class="text-center mb-5">
+                    <i class="fas fa-info-circle text-primary"></i> About This Application
+                </h1>
+                
+                <div class="card mb-4">
+                    <div class="card-body">
+                        <h3 class="card-title">
+                            <i class="fas fa-rocket"></i> Project Overview
+                        </h3>
+                        <p class="card-text">
+                            This is a demonstration Python Flask web application that showcases a complete 
+                            DevOps pipeline for deploying applications to Azure VMs. The project demonstrates 
+                            Infrastructure as Code (IaC) principles using Terraform and automated deployment 
+                            using GitHub Actions.
+                        </p>
+                    </div>
+                </div>
+
+                <div class="row g-4 mb-4">
+                    <div class="col-md-6">
+                        <div class="card h-100">
+                            <div class="card-body">
+                                <h5 class="card-title">
+                                    <i class="fas fa-layer-group text-primary"></i> Technology Stack
+                                </h5>
+                                <ul class="list-unstyled">
+                                    <li><i class="fab fa-python"></i> Python 3.x</li>
+                                    <li><i class="fas fa-fire"></i> Flask Web Framework</li>
+                                    <li><i class="fas fa-server"></i> Gunicorn WSGI Server</li>
+                                    <li><i class="fas fa-globe"></i> Nginx Reverse Proxy</li>
+                                    <li><i class="fab fa-bootstrap"></i> Bootstrap UI</li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="card h-100">
+                            <div class="card-body">
+                                <h5 class="card-title">
+                                    <i class="fas fa-cloud text-primary"></i> Infrastructure
+                                </h5>
+                                <ul class="list-unstyled">
+                                    <li><i class="fab fa-microsoft"></i> Microsoft Azure</li>
+                                    <li><i class="fas fa-cube"></i> Azure Virtual Machines</li>
+                                    <li><i class="fas fa-code-branch"></i> Terraform IaC</li>
+                                    <li><i class="fab fa-github"></i> GitHub Actions CI/CD</li>
+                                    <li><i class="fab fa-linux"></i> Ubuntu Linux</li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card mb-4">
+                    <div class="card-body">
+                        <h3 class="card-title">
+                            <i class="fas fa-cogs"></i> Architecture
+                        </h3>
+                        <p class="card-text">
+                            The application follows modern cloud-native principles:
+                        </p>
+                        <ol>
+                            <li><strong>Infrastructure Provisioning:</strong> Terraform creates Azure resources (VM, networking, security groups)</li>
+                            <li><strong>Automated Setup:</strong> Custom script extension installs and configures the environment</li>
+                            <li><strong>Application Deployment:</strong> GitHub repository is cloned and Flask app is deployed</li>
+                            <li><strong>Service Management:</strong> Supervisor and systemd manage application lifecycle</li>
+                            <li><strong>Web Server:</strong> Nginx acts as reverse proxy with load balancing</li>
+                            <li><strong>Monitoring:</strong> Health checks and system monitoring endpoints</li>
+                        </ol>
+                    </div>
+                </div>
+
+                <div class="card mb-4">
+                    <div class="card-body">
+                        <h3 class="card-title">
+                            <i class="fas fa-shield-alt"></i> Security Features
+                        </h3>
+                        <div class="row">
+                            <div class="col-md-6">
+                                <ul class="list-unstyled">
+                                    <li><i class="fas fa-key text-success"></i> SSH Key Authentication</li>
+                                    <li><i class="fas fa-ban text-warning"></i> Password Authentication Disabled</li>
+                                    <li><i class="fas fa-fire-extinguisher text-info"></i> UFW Firewall Configuration</li>
+                                </ul>
+                            </div>
+                            <div class="col-md-6">
+                                <ul class="list-unstyled">
+                                    <li><i class="fas fa-network-wired text-primary"></i> Network Security Groups</li>
+                                    <li><i class="fas fa-user-shield text-secondary"></i> Non-root Service Execution</li>
+                                    <li><i class="fas fa-lock text-danger"></i> Secure Service Management</li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-body text-center">
+                        <h3 class="card-title">
+                            <i class="fab fa-github"></i> Source Code
+                        </h3>
+                        <p class="card-text">
+                            This is an open-source demonstration project. The complete source code, 
+                            including Terraform configurations and CI/CD pipeline definitions, 
+                            is available for learning and reference.
+                        </p>
+                        <a href="#" class="btn btn-primary">
+                            <i class="fab fa-github"></i> View on GitHub
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+{% endblock %}
