@@ -240,38 +240,43 @@ stages:
                 # Get outputs with error checking and fallbacks
                 echo "Getting Terraform outputs..."
                 
-                # Try to get VM public IP
-                if terraform output vm_public_ip; then
-                  VM_PUBLIC_IP=$(terraform output -raw vm_public_ip)
-                  echo "VM Public IP from Terraform: $VM_PUBLIC_IP"
+                # Show all outputs first for debugging
+                echo "All Terraform outputs:"
+                terraform output
+                
+                # Get VM public IP
+                echo "Getting VM public IP..."
+                VM_PUBLIC_IP=$(terraform output -raw vm_public_ip 2>/dev/null)
+                if [ -n "$VM_PUBLIC_IP" ] && [ "$VM_PUBLIC_IP" != "null" ]; then
+                  echo "✅ VM Public IP from Terraform: $VM_PUBLIC_IP"
                 else
                   echo "WARNING: vm_public_ip output not found, trying Azure CLI fallback..."
                   # Fallback: Get public IP directly from Azure CLI
                   VM_PUBLIC_IP=$(az network public-ip show --resource-group "$RESOURCE_GROUP_NAME" --name "${VM_NAME}-pip" --query ipAddress --output tsv 2>/dev/null || echo "")
                   if [ -n "$VM_PUBLIC_IP" ]; then
-                    echo "VM Public IP from Azure CLI: $VM_PUBLIC_IP"
+                    echo "✅ VM Public IP from Azure CLI: $VM_PUBLIC_IP"
                   else
-                    echo "ERROR: Could not get VM public IP from Terraform or Azure CLI"
-                    terraform output || echo "No outputs available"
+                    echo "❌ ERROR: Could not get VM public IP from Terraform or Azure CLI"
                     exit 1
                   fi
                 fi
                 
-                # Try to get VM private IP
-                if terraform output vm_private_ip; then
-                  VM_PRIVATE_IP=$(terraform output -raw vm_private_ip)
-                  echo "VM Private IP: $VM_PRIVATE_IP"
+                # Get VM private IP
+                echo "Getting VM private IP..."
+                VM_PRIVATE_IP=$(terraform output -raw vm_private_ip 2>/dev/null)
+                if [ -n "$VM_PRIVATE_IP" ] && [ "$VM_PRIVATE_IP" != "null" ]; then
+                  echo "✅ VM Private IP: $VM_PRIVATE_IP"
                 else
-                  echo "WARNING: vm_private_ip output not found"
+                  echo "WARNING: vm_private_ip output not found, setting to empty"
                   VM_PRIVATE_IP=""
                 fi
                 
                 # Generate SSH connection string
                 if [ -n "$VM_PUBLIC_IP" ]; then
                   SSH_CONNECTION="ssh $(admin_username)@$VM_PUBLIC_IP"
-                  echo "SSH Connection: $SSH_CONNECTION"
+                  echo "✅ SSH Connection: $SSH_CONNECTION"
                 else
-                  echo "ERROR: Cannot generate SSH connection without public IP"
+                  echo "❌ ERROR: Cannot generate SSH connection without public IP"
                   exit 1
                 fi
                 
