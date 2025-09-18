@@ -233,43 +233,101 @@ stages:
                   exit 1
                 fi
                 
-                # Verify deployment
-                echo "Verifying Terraform state..."
-                terraform show
+                # Verify deployment and state before getting outputs
+                echo "=== VERIFYING TERRAFORM DEPLOYMENT ==="
+                echo "Checking Terraform state..."
+                if ! terraform show >/dev/null 2>&1; then
+                  echo "❌ ERROR: Terraform state is invalid or empty!"
+                  exit 1
+                fi
+                
+                echo "Checking if outputs are available..."
+                if ! terraform output >/dev/null 2>&1; then
+                  echo "❌ ERROR: No Terraform outputs available!"
+                  echo "This usually means the apply didn't complete successfully."
+                  exit 1
+                fi
+                
+                echo "✅ Terraform state and outputs are available"
+                echo "========================================"
                 
                 # Get outputs with error checking and fallbacks
                 echo "Getting Terraform outputs..."
                 
                 # Show all outputs first for debugging
-                echo "All Terraform outputs:"
+                echo "=== ALL TERRAFORM OUTPUTS (JSON) ==="
+                terraform output -json
+                echo "=== ALL TERRAFORM OUTPUTS (READABLE) ==="
                 terraform output
+                echo "===================================="
                 
-                # Get VM public IP
-                echo "Getting VM public IP..."
-                VM_PUBLIC_IP=$(terraform output -raw vm_public_ip 2>/dev/null)
-                if [ -n "$VM_PUBLIC_IP" ] && [ "$VM_PUBLIC_IP" != "null" ]; then
+                # Verify Terraform state
+                echo "=== TERRAFORM STATE VERIFICATION ==="
+                terraform show -json | jq '.values.outputs' 2>/dev/null || echo "No outputs found in state"
+                echo "===================================="
+                
+                # Get VM public IP with enhanced debugging
+                echo "=== GETTING VM PUBLIC IP ==="
+                echo "Attempting to get vm_public_ip output..."
+                VM_PUBLIC_IP=$(terraform output -raw vm_public_ip 2>&1)
+                echo "Raw output: '$VM_PUBLIC_IP'"
+                
+                if [ -n "$VM_PUBLIC_IP" ] && [ "$VM_PUBLIC_IP" != "null" ] && [ "$VM_PUBLIC_IP" != "Error"* ]; then
                   echo "✅ VM Public IP from Terraform: $VM_PUBLIC_IP"
                 else
-                  echo "WARNING: vm_public_ip output not found, trying Azure CLI fallback..."
-                  # Fallback: Get public IP directly from Azure CLI
-                  VM_PUBLIC_IP=$(az network public-ip show --resource-group "$RESOURCE_GROUP_NAME" --name "${VM_NAME}-pip" --query ipAddress --output tsv 2>/dev/null || echo "")
-                  if [ -n "$VM_PUBLIC_IP" ]; then
+                  echo "❌ WARNING: vm_public_ip output not valid: '$VM_PUBLIC_IP'"
+                  echo "Attempting Azure CLI fallback..."
+                  
+                  # List all public IPs in the resource group for debugging
+                  echo "All public IPs in resource group $RESOURCE_GROUP_NAME:"
+                  az network public-ip list --resource-group "$RESOURCE_GROUP_NAME" --query "[].{Name:name, IP:ipAddress, Status:provisioningState}" --output table
+                  
+                  # Try the expected public IP name
+                  EXPECTED_PIP_NAME="${VM_NAME}-pip"
+                  echo "Looking for public IP: $EXPECTED_PIP_NAME"
+                  VM_PUBLIC_IP=$(az network public-ip show --resource-group "$RESOURCE_GROUP_NAME" --name "$EXPECTED_PIP_NAME" --query ipAddress --output tsv 2>/dev/null || echo "")
+                  
+                  if [ -n "$VM_PUBLIC_IP" ] && [ "$VM_PUBLIC_IP" != "null" ]; then
                     echo "✅ VM Public IP from Azure CLI: $VM_PUBLIC_IP"
                   else
-                    echo "❌ ERROR: Could not get VM public IP from Terraform or Azure CLI"
+                    echo "❌ ERROR: Could not get VM public IP from Azure CLI either"
+                    echo "Checking if public IP resource exists..."
+                    az network public-ip show --resource-group "$RESOURCE_GROUP_NAME" --name "$EXPECTED_PIP_NAME" 2>&1 || echo "Public IP resource not found"
+                    
+                    # Final attempt: Check all public IPs and their allocation status
+                    echo "=== DETAILED PUBLIC IP DIAGNOSIS ==="
+                    az network public-ip list --resource-group "$RESOURCE_GROUP_NAME" --output json | jq -r '.[] | "\(.name): \(.ipAddress // "Not Allocated") (\(.publicIPAllocationMethod)) - \(.provisioningState)"'
+                    echo "===================================="
                     exit 1
                   fi
                 fi
+                echo "=========================="
                 
-                # Get VM private IP
-                echo "Getting VM private IP..."
-                VM_PRIVATE_IP=$(terraform output -raw vm_private_ip 2>/dev/null)
-                if [ -n "$VM_PRIVATE_IP" ] && [ "$VM_PRIVATE_IP" != "null" ]; then
+                # Validate that we have a proper IP address
+                echo "=== VALIDATING IP ADDRESS ==="
+                if [[ $VM_PUBLIC_IP =~ ^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$ ]]; then
+                  echo "✅ Valid IP address format: $VM_PUBLIC_IP"
+                else
+                  echo "❌ ERROR: Invalid IP address format: '$VM_PUBLIC_IP'"
+                  echo "Expected format: xxx.xxx.xxx.xxx"
+                  exit 1
+                fi
+                echo "=========================="
+                
+                # Get VM private IP with enhanced debugging
+                echo "=== GETTING VM PRIVATE IP ==="
+                echo "Attempting to get vm_private_ip output..."
+                VM_PRIVATE_IP=$(terraform output -raw vm_private_ip 2>&1)
+                echo "Raw output: '$VM_PRIVATE_IP'"
+                
+                if [ -n "$VM_PRIVATE_IP" ] && [ "$VM_PRIVATE_IP" != "null" ] && [ "$VM_PRIVATE_IP" != "Error"* ]; then
                   echo "✅ VM Private IP: $VM_PRIVATE_IP"
                 else
-                  echo "WARNING: vm_private_ip output not found, setting to empty"
+                  echo "❌ WARNING: vm_private_ip output not valid: '$VM_PRIVATE_IP'"
+                  echo "Setting to empty for now"
                   VM_PRIVATE_IP=""
                 fi
+                echo "=========================="
                 
                 # Generate SSH connection string
                 if [ -n "$VM_PUBLIC_IP" ]; then
@@ -288,6 +346,17 @@ stages:
                 echo "##vso[task.setvariable variable=resource_group_name;isOutput=true]$RESOURCE_GROUP_NAME"
                 echo "##vso[task.setvariable variable=vm_name;isOutput=true]$VM_NAME"
                 
+                # Create artifact with variables as fallback
+                echo "Creating variables artifact..."
+                mkdir -p $(Agent.TempDirectory)/terraform-outputs
+                echo "vm_public_ip=$VM_PUBLIC_IP" > $(Agent.TempDirectory)/terraform-outputs/variables.txt
+                echo "vm_private_ip=$VM_PRIVATE_IP" >> $(Agent.TempDirectory)/terraform-outputs/variables.txt
+                echo "ssh_connection=$SSH_CONNECTION" >> $(Agent.TempDirectory)/terraform-outputs/variables.txt
+                echo "resource_group_name=$RESOURCE_GROUP_NAME" >> $(Agent.TempDirectory)/terraform-outputs/variables.txt
+                echo "vm_name=$VM_NAME" >> $(Agent.TempDirectory)/terraform-outputs/variables.txt
+                echo "Generated variables file:"
+                cat $(Agent.TempDirectory)/terraform-outputs/variables.txt
+                
                 # Verify variables were set
                 echo "=== VERIFYING PIPELINE VARIABLES ==="
                 echo "vm_public_ip: $VM_PUBLIC_IP"
@@ -301,6 +370,12 @@ stages:
                 echo "VM Public IP: $VM_PUBLIC_IP"
                 echo "SSH Connection: $SSH_CONNECTION"
             name: 'TerraformDeploy'
+
+          - task: PublishPipelineArtifact@1
+            displayName: 'Publish Terraform Outputs'
+            inputs:
+              targetPath: '$(Agent.TempDirectory)/terraform-outputs'
+              artifact: 'terraform-outputs'
 
 - stage: 'Validate_Deployment'
   displayName: 'Validate Application Deployment'
@@ -318,6 +393,25 @@ stages:
       vmImage: 'ubuntu-latest'
     
     steps:
+    - script: |
+        echo "=== DEBUGGING STAGE DEPENDENCIES ==="
+        echo "Available stage dependencies:"
+        echo "Deploy stage status: $(stageDependencies.Deploy.result)"
+        echo "DeployInfrastructure job status: $(stageDependencies.Deploy.DeployInfrastructure.result)"
+        echo "======================================="
+        
+        echo "=== DEBUGGING PIPELINE VARIABLES ==="
+        echo "VM Public IP: '$(vm_public_ip)'"
+        echo "SSH Connection: '$(ssh_connection)'"
+        echo "Resource Group: '$(resource_group_name)'"
+        echo "VM Name: '$(vm_name)'"
+        echo
+        echo "Variable lengths:"
+        echo "vm_public_ip length: $(echo '$(vm_public_ip)' | wc -c)"
+        echo "ssh_connection length: $(echo '$(ssh_connection)' | wc -c)"
+        echo "====================================="
+      displayName: 'Debug Stage Variables and Dependencies'
+    
     - task: DownloadPipelineArtifact@2
       displayName: 'Download SSH Keys'
       inputs:
@@ -325,31 +419,73 @@ stages:
         artifactName: 'ssh-keys'
         targetPath: '$(Agent.TempDirectory)/ssh-keys'
     
+    - task: DownloadPipelineArtifact@2
+      displayName: 'Download Terraform Outputs (Fallback)'
+      inputs:
+        buildType: 'current'
+        artifactName: 'terraform-outputs'
+        targetPath: '$(Agent.TempDirectory)/terraform-outputs'
+    
+    - script: |
+        echo "=== FALLBACK VARIABLE LOADING ==="
+        if [ -f "$(Agent.TempDirectory)/terraform-outputs/variables.txt" ]; then
+          echo "Loading variables from artifact..."
+          cat $(Agent.TempDirectory)/terraform-outputs/variables.txt
+          
+          # Source the variables if pipeline variables are empty
+          if [ -z "$(vm_public_ip)" ] || [ "$(vm_public_ip)" = "" ]; then
+            echo "Pipeline variables are empty, loading from artifact..."
+            source $(Agent.TempDirectory)/terraform-outputs/variables.txt
+            
+            echo "Setting task variables from artifact:"
+            echo "##vso[task.setvariable variable=vm_public_ip_fallback]$vm_public_ip"
+            echo "##vso[task.setvariable variable=ssh_connection_fallback]$ssh_connection"
+            echo "##vso[task.setvariable variable=resource_group_name_fallback]$resource_group_name"
+            echo "##vso[task.setvariable variable=vm_name_fallback]$vm_name"
+          else
+            echo "Pipeline variables are available, using them..."
+          fi
+        else
+          echo "❌ ERROR: Terraform outputs artifact not found!"
+        fi
+        echo "=================================="
+      displayName: 'Load Variables from Artifact (if needed)'
+    
     - script: |
         echo "=== DEBUGGING PIPELINE VARIABLES ==="
         echo "VM Public IP: '$(vm_public_ip)'"
         echo "SSH Connection: '$(ssh_connection)'"
         echo "Resource Group: '$(resource_group_name)'"
         echo "VM Name: '$(vm_name)'"
+        echo "Fallback variables:"
+        echo "VM Public IP (fallback): '$(vm_public_ip_fallback)'"
+        echo "SSH Connection (fallback): '$(ssh_connection_fallback)'"
         echo "====================================="
         
-        # Check if variables are empty
-        if [ -z "$(vm_public_ip)" ]; then
-          echo "❌ ERROR: VM Public IP is empty!"
+        # Determine which variables to use
+        if [ -n "$(vm_public_ip)" ] && [ "$(vm_public_ip)" != "" ]; then
+          VM_IP="$(vm_public_ip)"
+          SSH_CONN="$(ssh_connection)"
+          echo "✅ Using pipeline variables"
+        elif [ -n "$(vm_public_ip_fallback)" ] && [ "$(vm_public_ip_fallback)" != "" ]; then
+          VM_IP="$(vm_public_ip_fallback)"
+          SSH_CONN="$(ssh_connection_fallback)"
+          echo "✅ Using fallback variables from artifact"
+        else
+          echo "❌ ERROR: No valid variables found!"
           echo "This indicates the Terraform deployment may have failed."
           echo "Check the previous 'Deploy Infrastructure with Terraform' task for errors."
           exit 1
         fi
         
-        if [ -z "$(ssh_connection)" ]; then
-          echo "❌ ERROR: SSH Connection is empty!"
-          exit 1
-        fi
-        
-        echo "✅ All variables are populated correctly"
+        echo "✅ Variables selected successfully"
         echo "Waiting for VM setup to complete..."
-        echo "VM Public IP: $(vm_public_ip)"
-        echo "SSH Connection: $(ssh_connection)"
+        echo "VM Public IP: $VM_IP"
+        echo "SSH Connection: $SSH_CONN"
+        
+        # Store variables for subsequent tasks
+        echo "##vso[task.setvariable variable=final_vm_ip]$VM_IP"
+        echo "##vso[task.setvariable variable=final_ssh_connection]$SSH_CONN"
         
         # Wait for VM extension to complete setup
         sleep 120
@@ -357,7 +493,14 @@ stages:
     
     - script: |
         echo "Testing application endpoints..."
-        VM_IP="$(vm_public_ip)"
+        VM_IP="$(final_vm_ip)"
+        
+        if [ -z "$VM_IP" ]; then
+          echo "❌ ERROR: Final VM IP is not set!"
+          exit 1
+        fi
+        
+        echo "Using VM IP: $VM_IP"
         
         # Test application health (with retries)
         for i in {1..20}; do
@@ -398,7 +541,14 @@ stages:
         cp $(Agent.TempDirectory)/ssh-keys/ssh_private_key ~/.ssh/id_rsa
         chmod 600 ~/.ssh/id_rsa
         
-        VM_IP="$(vm_public_ip)"
+        VM_IP="$(final_vm_ip)"
+        
+        if [ -z "$VM_IP" ]; then
+          echo "❌ ERROR: Final VM IP is not set for SSH test!"
+          exit 1
+        fi
+        
+        echo "Using VM IP for SSH: $VM_IP"
         
         # Add VM to known hosts
         ssh-keyscan -H $VM_IP >> ~/.ssh/known_hosts
@@ -422,17 +572,19 @@ stages:
         scriptType: 'bash'
         scriptLocation: 'inlineScript'
         inlineScript: |
+          VM_IP="$(final_vm_ip)"
+          
           echo "## 🚀 Deployment Summary" >> $(Agent.TempDirectory)/deployment_summary.md
           echo "" >> $(Agent.TempDirectory)/deployment_summary.md
           echo "### 📋 Infrastructure Details" >> $(Agent.TempDirectory)/deployment_summary.md
           echo "- **Resource Group**: $(resource_group_name)" >> $(Agent.TempDirectory)/deployment_summary.md
           echo "- **VM Name**: $(vm_name)" >> $(Agent.TempDirectory)/deployment_summary.md
-          echo "- **VM Public IP**: $(vm_public_ip)" >> $(Agent.TempDirectory)/deployment_summary.md
+          echo "- **VM Public IP**: $VM_IP" >> $(Agent.TempDirectory)/deployment_summary.md
           echo "- **Location**: $(location)" >> $(Agent.TempDirectory)/deployment_summary.md
           echo "" >> $(Agent.TempDirectory)/deployment_summary.md
           echo "### 🔗 Application URLs" >> $(Agent.TempDirectory)/deployment_summary.md
-          echo "- **Application Home**: http://$(vm_public_ip)/" >> $(Agent.TempDirectory)/deployment_summary.md
-          echo "- **Health Check**: http://$(vm_public_ip)/health" >> $(Agent.TempDirectory)/deployment_summary.md
+          echo "- **Application Home**: http://$VM_IP/" >> $(Agent.TempDirectory)/deployment_summary.md
+          echo "- **Health Check**: http://$VM_IP/health" >> $(Agent.TempDirectory)/deployment_summary.md
           echo "- **System Status**: http://$(vm_public_ip)/status" >> $(Agent.TempDirectory)/deployment_summary.md
           echo "- **API Info**: http://$(vm_public_ip)/api/info" >> $(Agent.TempDirectory)/deployment_summary.md
           echo "" >> $(Agent.TempDirectory)/deployment_summary.md
