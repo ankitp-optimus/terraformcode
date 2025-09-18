@@ -26,14 +26,22 @@ locals {
   app_name        = var.app_name
   app_port        = 5000  # Default Flask port
 
-  # Common tags for all resources
+  # Common tags for all resources (Azure Policy Compliant)
   common_tags = {
-    Environment = local.environment
-    Project     = local.project
-    ManagedBy   = "Terraform"
-    Owner       = "DevOps Team"
-    CostCenter  = "Engineering"
-    AppName     = var.app_name
+    # Required by Azure Policy (case-sensitive)
+    "Created By"        = "Azure DevOps Pipeline"
+    "Created For"       = "Python Flask Application"
+    "Owner"             = "DevOps Team"
+    "Environment"       = local.environment
+    "Data Store Type"   = "None"
+    "Project"           = local.project
+    
+    # Additional standard tags
+    ManagedBy          = "Terraform"
+    CostCenter         = "Engineering"
+    AppName            = var.app_name
+    DeploymentMethod   = "Azure DevOps"
+    Repository         = "terraformcode"
   }
 
   # Security rules configuration

@@ -155,6 +155,8 @@ stages:
               scriptType: 'bash'
               scriptLocation: 'inlineScript'
               inlineScript: |
+                set -e  # Exit on any error
+                
                 # Install Terraform
                 echo "Installing Terraform..."
                 wget -O- https://apt.releases.hashicorp.com/gpg | gpg --dearmor | sudo tee /usr/share/keyrings/hashicorp-archive-keyring.gpg
@@ -172,12 +174,18 @@ stages:
                 echo "VM Name: $VM_NAME"
                 echo "SSH Public Key: $(ssh_public_key)"
                 
+                # Debug: Show Azure context
+                echo "Azure CLI context:"
+                az account show
+                
                 cd terraform
                 
                 # Initialize Terraform
+                echo "Initializing Terraform..."
                 terraform init
                 
                 # Plan deployment
+                echo "Planning Terraform deployment..."
                 terraform plan \
                   -var="resource_group_name=$RESOURCE_GROUP_NAME" \
                   -var="location=$(location)" \
@@ -190,13 +198,42 @@ stages:
                   -out=tfplan
                 
                 # Apply deployment
+                echo "Applying Terraform deployment..."
                 terraform apply -auto-approve tfplan
                 
-                # Get outputs
-                VM_PUBLIC_IP=$(terraform output -raw vm_public_ip)
-                VM_PRIVATE_IP=$(terraform output -raw vm_private_ip)
-                SSH_CONNECTION=$(terraform output -raw ssh_connection)
+                # Verify deployment
+                echo "Verifying Terraform state..."
+                terraform show
                 
+                # Get outputs with error checking
+                echo "Getting Terraform outputs..."
+                if terraform output vm_public_ip; then
+                  VM_PUBLIC_IP=$(terraform output -raw vm_public_ip)
+                  echo "VM Public IP: $VM_PUBLIC_IP"
+                else
+                  echo "ERROR: vm_public_ip output not found"
+                  terraform output
+                  exit 1
+                fi
+                
+                if terraform output vm_private_ip; then
+                  VM_PRIVATE_IP=$(terraform output -raw vm_private_ip)
+                  echo "VM Private IP: $VM_PRIVATE_IP"
+                else
+                  echo "ERROR: vm_private_ip output not found"
+                  exit 1
+                fi
+                
+                if terraform output ssh_connection; then
+                  SSH_CONNECTION=$(terraform output -raw ssh_connection)
+                  echo "SSH Connection: $SSH_CONNECTION"
+                else
+                  echo "ERROR: ssh_connection output not found"
+                  exit 1
+                fi
+                
+                # Set pipeline variables
+                echo "Setting pipeline variables..."
                 echo "##vso[task.setvariable variable=vm_public_ip;isOutput=true]$VM_PUBLIC_IP"
                 echo "##vso[task.setvariable variable=vm_private_ip;isOutput=true]$VM_PRIVATE_IP"
                 echo "##vso[task.setvariable variable=ssh_connection;isOutput=true]$SSH_CONNECTION"
@@ -232,6 +269,27 @@ stages:
         targetPath: '$(Agent.TempDirectory)/ssh-keys'
     
     - script: |
+        echo "=== DEBUGGING PIPELINE VARIABLES ==="
+        echo "VM Public IP: '$(vm_public_ip)'"
+        echo "SSH Connection: '$(ssh_connection)'"
+        echo "Resource Group: '$(resource_group_name)'"
+        echo "VM Name: '$(vm_name)'"
+        echo "====================================="
+        
+        # Check if variables are empty
+        if [ -z "$(vm_public_ip)" ]; then
+          echo "❌ ERROR: VM Public IP is empty!"
+          echo "This indicates the Terraform deployment may have failed."
+          echo "Check the previous 'Deploy Infrastructure with Terraform' task for errors."
+          exit 1
+        fi
+        
+        if [ -z "$(ssh_connection)" ]; then
+          echo "❌ ERROR: SSH Connection is empty!"
+          exit 1
+        fi
+        
+        echo "✅ All variables are populated correctly"
         echo "Waiting for VM setup to complete..."
         echo "VM Public IP: $(vm_public_ip)"
         echo "SSH Connection: $(ssh_connection)"
