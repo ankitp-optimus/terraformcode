@@ -172,7 +172,19 @@ stages:
                 
                 echo "Resource Group: $RESOURCE_GROUP_NAME"
                 echo "VM Name: $VM_NAME"
-                echo "SSH Public Key: $(ssh_public_key)"
+                
+                # Debug SSH Key
+                echo "=== SSH KEY DEBUGGING ==="
+                echo "SSH Public Key (first 50 chars): $(echo '$(ssh_public_key)' | cut -c1-50)..."
+                echo "SSH Public Key length: $(echo '$(ssh_public_key)' | wc -c)"
+                
+                if [ -z "$(ssh_public_key)" ]; then
+                  echo "❌ ERROR: SSH Public Key is empty!"
+                  echo "This will cause Terraform to fail."
+                  exit 1
+                fi
+                echo "✅ SSH Public Key is present"
+                echo "========================="
                 
                 # Debug: Show Azure context
                 echo "Azure CLI context:"
@@ -199,36 +211,56 @@ stages:
                 
                 # Apply deployment
                 echo "Applying Terraform deployment..."
-                terraform apply -auto-approve tfplan
+                if terraform apply -auto-approve tfplan; then
+                  echo "✅ Terraform apply completed successfully"
+                else
+                  echo "❌ Terraform apply failed!"
+                  echo "Terraform state:"
+                  terraform show || echo "No state to show"
+                  echo "Terraform output:"
+                  terraform output || echo "No outputs available"
+                  exit 1
+                fi
                 
                 # Verify deployment
                 echo "Verifying Terraform state..."
                 terraform show
                 
-                # Get outputs with error checking
+                # Get outputs with error checking and fallbacks
                 echo "Getting Terraform outputs..."
+                
+                # Try to get VM public IP
                 if terraform output vm_public_ip; then
                   VM_PUBLIC_IP=$(terraform output -raw vm_public_ip)
-                  echo "VM Public IP: $VM_PUBLIC_IP"
+                  echo "VM Public IP from Terraform: $VM_PUBLIC_IP"
                 else
-                  echo "ERROR: vm_public_ip output not found"
-                  terraform output
-                  exit 1
+                  echo "WARNING: vm_public_ip output not found, trying Azure CLI fallback..."
+                  # Fallback: Get public IP directly from Azure CLI
+                  VM_PUBLIC_IP=$(az network public-ip show --resource-group "$RESOURCE_GROUP_NAME" --name "${VM_NAME}-pip" --query ipAddress --output tsv 2>/dev/null || echo "")
+                  if [ -n "$VM_PUBLIC_IP" ]; then
+                    echo "VM Public IP from Azure CLI: $VM_PUBLIC_IP"
+                  else
+                    echo "ERROR: Could not get VM public IP from Terraform or Azure CLI"
+                    terraform output || echo "No outputs available"
+                    exit 1
+                  fi
                 fi
                 
+                # Try to get VM private IP
                 if terraform output vm_private_ip; then
                   VM_PRIVATE_IP=$(terraform output -raw vm_private_ip)
                   echo "VM Private IP: $VM_PRIVATE_IP"
                 else
-                  echo "ERROR: vm_private_ip output not found"
-                  exit 1
+                  echo "WARNING: vm_private_ip output not found"
+                  VM_PRIVATE_IP=""
                 fi
                 
-                if terraform output ssh_connection; then
-                  SSH_CONNECTION=$(terraform output -raw ssh_connection)
+                # Generate SSH connection string
+                if [ -n "$VM_PUBLIC_IP" ]; then
+                  SSH_CONNECTION="ssh $(admin_username)@$VM_PUBLIC_IP"
                   echo "SSH Connection: $SSH_CONNECTION"
                 else
-                  echo "ERROR: ssh_connection output not found"
+                  echo "ERROR: Cannot generate SSH connection without public IP"
                   exit 1
                 fi
                 
