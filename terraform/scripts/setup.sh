@@ -78,14 +78,23 @@ if [ -f "requirements.txt" ]; then
     sudo -u $ADMIN_USER $APP_DIR/venv/bin/pip install -r requirements.txt
 else
     # Install basic Flask dependencies if no requirements.txt
-    sudo -u $ADMIN_USER $APP_DIR/venv/bin/pip install flask gunicorn
+    sudo -u $ADMIN_USER $APP_DIR/venv/bin/pip install flask gunicorn psutil
 fi
+
+# Test if app can import successfully
+log "Testing Flask application..."
+cd $APP_DIR
+sudo -u $ADMIN_USER $APP_DIR/venv/bin/python -c "import app; print('App imports successfully')" || {
+    log "ERROR: App failed to import!"
+    # Try to install missing dependencies
+    sudo -u $ADMIN_USER $APP_DIR/venv/bin/pip install psutil
+}
 
 # Create Gunicorn configuration
 log "Creating Gunicorn configuration..."
 cat > /etc/supervisor/conf.d/$SERVICE_NAME.conf << EOF
 [program:$SERVICE_NAME]
-command=$APP_DIR/venv/bin/gunicorn --bind 127.0.0.1:5000 --workers 3 app:app
+command=$APP_DIR/venv/bin/gunicorn --bind 127.0.0.1:5000 --workers 2 --timeout 120 --log-level info app:app
 directory=$APP_DIR
 user=$ADMIN_USER
 autostart=true
@@ -187,10 +196,35 @@ log "Starting services..."
 systemctl reload supervisor
 supervisorctl reread
 supervisorctl update
+
+# Start the application service
+log "Starting $SERVICE_NAME service..."
 supervisorctl start $SERVICE_NAME
 
+# Check if service started successfully
+sleep 5
+if supervisorctl status $SERVICE_NAME | grep -q "RUNNING"; then
+    log "✅ $SERVICE_NAME service started successfully"
+else
+    log "❌ $SERVICE_NAME service failed to start"
+    log "Service status:"
+    supervisorctl status $SERVICE_NAME
+    log "Application logs:"
+    tail -10 /var/log/$SERVICE_NAME.log || echo "No logs found"
+fi
+
+# Start nginx
+log "Starting nginx..."
 systemctl enable nginx
 systemctl restart nginx
+
+# Check nginx status
+if systemctl is-active --quiet nginx; then
+    log "✅ Nginx started successfully"
+else
+    log "❌ Nginx failed to start"
+    systemctl status nginx --no-pager -l
+fi
 
 systemctl daemon-reload
 systemctl enable $SERVICE_NAME
@@ -198,17 +232,19 @@ systemctl enable $SERVICE_NAME
 # Create health check script
 cat > $APP_DIR/health_check.sh << EOF
 #!/bin/bash
+echo "Testing Flask app directly..."
 curl -f http://localhost:5000/health || exit 1
+echo "Testing through nginx..."
 curl -f http://localhost/health || exit 1
-echo "Health check passed!"
+echo "✅ All health checks passed!"
 EOF
 
 chmod +x $APP_DIR/health_check.sh
 chown $ADMIN_USER:$ADMIN_USER $APP_DIR/health_check.sh
 
 # Final status check
-log "Checking service status..."
-sleep 5
+log "Performing final status check..."
+sleep 10
 
 if supervisorctl status $SERVICE_NAME | grep -q "RUNNING"; then
     log "✅ Application is running successfully"

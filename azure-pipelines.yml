@@ -122,7 +122,8 @@ stages:
 - stage: 'Deploy'
   displayName: 'Deploy Infrastructure and Application'
   dependsOn: 'Validate'
-  condition: and(succeeded(), eq(variables['Build.SourceBranch'], 'refs/heads/main'))
+  # Removed branch condition for testing - deploy on any branch
+  # condition: and(succeeded(), eq(variables['Build.SourceBranch'], 'refs/heads/main'))
   variables:
     ssh_public_key: $[ stageDependencies.Validate.ValidateCode.outputs['PrepareEnvironment.ssh_public_key'] ]
     ssh_private_key: $[ stageDependencies.Validate.ValidateCode.outputs['PrepareEnvironment.ssh_private_key'] ]
@@ -138,6 +139,16 @@ stages:
       runOnce:
         deploy:
           steps:
+          - script: |
+              echo "=== DEPLOY STAGE DEBUGGING ==="
+              echo "Deploy stage is running!"
+              echo "Branch: $(Build.SourceBranch)"
+              echo "Build ID: $(Build.BuildId)"
+              echo "SSH Public Key (first 50 chars): $(echo '$(ssh_public_key)' | cut -c1-50)..."
+              echo "SSH Public Key length: $(echo '$(ssh_public_key)' | wc -c)"
+              echo "==============================="
+            displayName: 'Debug Deploy Stage Variables'
+          
           - checkout: self
             displayName: 'Checkout Repository'
           
@@ -271,6 +282,15 @@ stages:
                 echo "##vso[task.setvariable variable=ssh_connection;isOutput=true]$SSH_CONNECTION"
                 echo "##vso[task.setvariable variable=resource_group_name;isOutput=true]$RESOURCE_GROUP_NAME"
                 echo "##vso[task.setvariable variable=vm_name;isOutput=true]$VM_NAME"
+                
+                # Verify variables were set
+                echo "=== VERIFYING PIPELINE VARIABLES ==="
+                echo "vm_public_ip: $VM_PUBLIC_IP"
+                echo "vm_private_ip: $VM_PRIVATE_IP"
+                echo "ssh_connection: $SSH_CONNECTION"
+                echo "resource_group_name: $RESOURCE_GROUP_NAME"
+                echo "vm_name: $VM_NAME"
+                echo "===================================="
                 
                 echo "Infrastructure deployed successfully!"
                 echo "VM Public IP: $VM_PUBLIC_IP"

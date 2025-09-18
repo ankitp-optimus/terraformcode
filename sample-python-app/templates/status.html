@@ -21,7 +21,10 @@
                                 <h3 class="text-primary">{{ "%.1f"|format(status.cpu_usage) }}%</h3>
                                 <div class="progress" style="height: 8px;">
                                     <div class="progress-bar" role="progressbar" 
-                                         style="width: {{ status.cpu_usage }}%" aria-valuenow="{{ status.cpu_usage }}" aria-valuemin="0" aria-valuemax="100"></div>
+                                         data-width="{{ "%.1f"|format(status.cpu_usage) }}"
+                                         aria-valuenow="{{ "%.1f"|format(status.cpu_usage) }}" 
+                                         aria-valuemin="0" 
+                                         aria-valuemax="100"></div>
                                 </div>
                             </div>
                         </div>
@@ -36,7 +39,10 @@
                                 <h3 class="text-info">{{ "%.1f"|format(status.memory_usage) }}%</h3>
                                 <div class="progress" style="height: 8px;">
                                     <div class="progress-bar bg-info" role="progressbar" 
-                                         style="width: {{ status.memory_usage }}%" aria-valuenow="{{ status.memory_usage }}" aria-valuemin="0" aria-valuemax="100"></div>
+                                         data-width="{{ "%.1f"|format(status.memory_usage) }}"
+                                         aria-valuenow="{{ "%.1f"|format(status.memory_usage) }}" 
+                                         aria-valuemin="0" 
+                                         aria-valuemax="100"></div>
                                 </div>
                             </div>
                         </div>
@@ -51,7 +57,10 @@
                                 <h3 class="text-warning">{{ "%.1f"|format(status.disk_usage) }}%</h3>
                                 <div class="progress" style="height: 8px;">
                                     <div class="progress-bar bg-warning" role="progressbar" 
-                                         style="width: {{ status.disk_usage }}%" aria-valuenow="{{ status.disk_usage }}" aria-valuemin="0" aria-valuemax="100"></div>
+                                         data-width="{{ "%.1f"|format(status.disk_usage) }}"
+                                         aria-valuenow="{{ "%.1f"|format(status.disk_usage) }}" 
+                                         aria-valuemin="0" 
+                                         aria-valuemax="100"></div>
                                 </div>
                             </div>
                         </div>
@@ -204,6 +213,15 @@ function getSystemInfo() {
 function refreshPage() {
     location.reload();
 }
+
+// Apply progress bar widths from data attributes
+document.addEventListener('DOMContentLoaded', function() {
+    const progressBars = document.querySelectorAll('.progress-bar[data-width]');
+    progressBars.forEach(function(bar) {
+        const width = bar.getAttribute('data-width');
+        bar.style.width = width + '%';
+    });
+});
 
 // Auto-refresh status every 30 seconds
 setInterval(function() {
