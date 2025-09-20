@@ -968,4 +968,4 @@ stages:
           # Delete the entire resource group (faster than Terraform destroy)
           az group delete --name "$(resource_group_name)" --yes --no-wait
           
-          echo "✅ Cleanup initiated successfully!"
+          echo "✅ Cleanup initiated successfully!"!"
