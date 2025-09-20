@@ -1,367 +1,730 @@
-#!/bin/bash#!/bin/bash
+#!/bin/bash#!/bin/bash#!/bin/bash
 
 
+
+# VM Setup Script for Python Flask App with Nginx
+
+# This script sets up the VM environment, clones the GitHub repo, and deploys the Python application
 
 # VM Setup Script for Python Flask App with Nginx# VM Se# Update package lists and system
 
-# This script sets up the VM environment, clones the GitHub repo, and deploys the Python applicationlog "Updating system packages..."
-
-apt-get update -y
-
 # Don't exit on every error - handle critical vs non-critical operations separately
+
+set +e# This script sets up the VM environment, clones the GitHub repo, and deploys the Python applicationlog "Updating system packages..."
+
+
+
+# Set strict mode for critical operations when neededapt-get update -y
+
+strict_mode() {
+
+    set -e# Don't exit on every error - handle critical vs non-critical operations separately
+
+}
 
 set +e# Ensure universe repository is enabled (required for some packages)
 
-log "Enabling universe repository..."
-
-# Set strict mode for critical operations when neededadd-apt-repository universe -y
-
-strict_mode() {apt-get update -y
-
-    set -e
-
-}# Upgrade system packages
-
-apt-get upgrade -y
-
 # Set permissive mode for non-critical operations
 
-permissive_mode() {# Install required packages
+permissive_mode() {log "Enabling universe repository..."
 
-    set +elog "Installing required packages..."
+    set +e
 
-}# Install packages one by one for better error handling
+}# Set strict mode for critical operations when neededadd-apt-repository universe -y
 
-apt-get install -y python3
 
-# Variables passed from Terraformapt-get install -y python3-pip
 
-GITHUB_REPO_URL="${github_repo_url}"apt-get install -y python3-venv
+# Variables passed from Terraformstrict_mode() {apt-get update -y
 
-APP_NAME="${app_name}"apt-get install -y nginx
+GITHUB_REPO_URL="${github_repo_url}"
 
-GITHUB_TOKEN="${github_token}"apt-get install -y git
+APP_NAME="${app_name}"    set -e
 
-ADMIN_USER="${admin_username}"apt-get install -y curl
+GITHUB_TOKEN="${github_token}"
 
-APP_DIR="/home/$ADMIN_USER/$APP_NAME"apt-get install -y supervisor
+ADMIN_USER="${admin_username}"}# Upgrade system packages
 
-SERVICE_NAME="$APP_NAME"apt-get install -y ufw
+APP_DIR="/home/$ADMIN_USER/$APP_NAME"
 
-apt-get install -y htop
+SERVICE_NAME="$APP_NAME"apt-get upgrade -y
 
-# Log script start and variables (for debugging)apt-get install -y unzip
+
+
+# Log script start and variables (for debugging)# Set permissive mode for non-critical operations
 
 LOG_FILE="/var/log/vm-setup.log"
 
-echo "=== VM Setup Script Started at $(date) ===" | tee -a $LOG_FILE# Verify Python installation
+echo "=== VM Setup Script Started at $(date) ===" | tee -a $LOG_FILEpermissive_mode() {# Install required packages
 
-echo "Variables received:" | tee -a $LOG_FILElog "Verifying Python installation..."
+echo "Variables received:" | tee -a $LOG_FILE
 
-echo "  GITHUB_REPO_URL: $GITHUB_REPO_URL" | tee -a $LOG_FILEpython3 --version
+echo "  GITHUB_REPO_URL: $GITHUB_REPO_URL" | tee -a $LOG_FILE    set +elog "Installing required packages..."
 
-echo "  APP_NAME: $APP_NAME" | tee -a $LOG_FILEpip3 --versionhon Flask App with Nginx
+echo "  APP_NAME: $APP_NAME" | tee -a $LOG_FILE
 
-echo "  ADMIN_USER: $ADMIN_USER" | tee -a $LOG_FILE# This script sets up the VM environment, clones the GitHub repo, and deploys the Python application
+echo "  ADMIN_USER: $ADMIN_USER" | tee -a $LOG_FILE}# Install packages one by one for better error handling
 
 echo "  GitHub Token: $(if [ ! -z "$GITHUB_TOKEN" ]; then echo "PROVIDED"; else echo "NOT PROVIDED"; fi)" | tee -a $LOG_FILE
 
-echo "================================" | tee -a $LOG_FILEset -e  # Exit on any error
+echo "================================" | tee -a $LOG_FILEapt-get install -y python3
 
 
 
-# Logging function# Variables passed from Terraform
+# Logging function# Variables passed from Terraformapt-get install -y python3-pip
 
-log() {GITHUB_REPO_URL="${github_repo_url}"
+log() {
 
-    echo "[$(date '+%Y-%m-%d %H:%M:%S')] $1" | tee -a $LOG_FILEAPP_NAME="${app_name}"
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] $1" | tee -a $LOG_FILEGITHUB_REPO_URL="${github_repo_url}"apt-get install -y python3-venv
 
-}GITHUB_TOKEN="${github_token}"
+}
 
-ADMIN_USER="${admin_username}"
+APP_NAME="${app_name}"apt-get install -y nginx
 
-log "Starting VM setup for $APP_NAME"APP_DIR="/home/$ADMIN_USER/$APP_NAME"
+log "Starting VM setup for $APP_NAME"
 
-SERVICE_NAME="$APP_NAME"
+GITHUB_TOKEN="${github_token}"apt-get install -y git
 
 # Update package lists and system
 
-log "Updating system packages..."# Logging function
-
-apt-get update -ylog() {
-
-    echo "[$(date '+%Y-%m-%d %H:%M:%S')] $1" | tee -a /var/log/app-setup.log
-
-# Ensure universe repository is enabled (required for some packages)}
-
-log "Enabling universe repository..."
-
-add-apt-repository universe -ylog "Starting VM setup for $APP_NAME"
+log "Updating system packages..."ADMIN_USER="${admin_username}"apt-get install -y curl
 
 apt-get update -y
 
-# Configure firewall
+APP_DIR="/home/$ADMIN_USER/$APP_NAME"apt-get install -y supervisor
 
-# Upgrade system packageslog "Configuring firewall..."
+# Ensure universe repository is enabled (required for some packages)
 
-apt-get upgrade -yufw allow OpenSSH
+log "Enabling universe repository..."SERVICE_NAME="$APP_NAME"apt-get install -y ufw
 
-ufw allow 'Nginx Full'
+add-apt-repository universe -y
 
-# Install required packages with better error handlingufw allow 5000  # Flask default port
+apt-get update -yapt-get install -y htop
 
-log "Installing required packages..."ufw --force enable
+
+
+# Upgrade system packages# Log script start and variables (for debugging)apt-get install -y unzip
+
+apt-get upgrade -y
+
+LOG_FILE="/var/log/vm-setup.log"
+
+# Install required packages with better error handling
+
+log "Installing required packages..."echo "=== VM Setup Script Started at $(date) ===" | tee -a $LOG_FILE# Verify Python installation
 
 strict_mode
 
-# Create application directory
+echo "Variables received:" | tee -a $LOG_FILElog "Verifying Python installation..."
 
-# Install critical packages one by one for better error handlinglog "Setting up application directory..."
+# Install critical packages one by one for better error handling
 
-log "Installing Python3..."mkdir -p $APP_DIR
+log "Installing Python3..."echo "  GITHUB_REPO_URL: $GITHUB_REPO_URL" | tee -a $LOG_FILEpython3 --version
 
-apt-get install -y python3chown $ADMIN_USER:$ADMIN_USER $APP_DIR
+apt-get install -y python3
 
+echo "  APP_NAME: $APP_NAME" | tee -a $LOG_FILEpip3 --versionhon Flask App with Nginx
 
+log "Installing pip..."
 
-log "Installing pip..."# Clone GitHub repository
-
-apt-get install -y python3-piplog "Cloning GitHub repository..."
-
-cd /home/$ADMIN_USER
-
-log "Installing python3-venv..."
-
-apt-get install -y python3-venv# Remove existing directory if it exists
-
-if [ -d "$APP_NAME" ]; then
-
-log "Installing nginx..."    log "Removing existing application directory..."
-
-apt-get install -y nginx    rm -rf $APP_NAME
-
-fi
-
-log "Installing git..."
-
-apt-get install -y gitif [ ! -z "$GITHUB_TOKEN" ]; then
-
-    # Use token for private repositories
-
-log "Installing curl..."    REPO_URL_WITH_TOKEN=$(echo $GITHUB_REPO_URL | sed "s|https://|https://$GITHUB_TOKEN@|")
-
-apt-get install -y curl    log "Cloning private repository with token..."
-
-    sudo -u $ADMIN_USER git clone $REPO_URL_WITH_TOKEN $APP_NAME
-
-log "Installing supervisor..."else
-
-apt-get install -y supervisor    # Public repository
-
-    log "Cloning public repository..."
-
-log "Installing firewall utilities..."    sudo -u $ADMIN_USER git clone $GITHUB_REPO_URL $APP_NAME
-
-apt-get install -y ufwfi
+apt-get install -y python3-pipecho "  ADMIN_USER: $ADMIN_USER" | tee -a $LOG_FILE# This script sets up the VM environment, clones the GitHub repo, and deploys the Python application
 
 
 
-log "Installing monitoring tools..."# Verify the clone was successful
+log "Installing python3-venv..."echo "  GitHub Token: $(if [ ! -z "$GITHUB_TOKEN" ]; then echo "PROVIDED"; else echo "NOT PROVIDED"; fi)" | tee -a $LOG_FILE
 
-apt-get install -y htopif [ ! -d "$APP_NAME" ]; then
+apt-get install -y python3-venv
 
-    log "❌ ERROR: Failed to clone repository!"
+echo "================================" | tee -a $LOG_FILEset -e  # Exit on any error
 
-log "Installing unzip..."    log "Repository URL: $GITHUB_REPO_URL"
+log "Installing nginx..."
 
-apt-get install -y unzip    exit 1
+apt-get install -y nginx
 
-fi
 
-permissive_mode
 
-log "✅ Repository cloned successfully"
+log "Installing git..."# Logging function# Variables passed from Terraform
 
-# Verify Python installationlog "Repository contents:"
+apt-get install -y git
 
-log "Verifying Python installation..."ls -la /home/$ADMIN_USER/$APP_NAME/
+log() {GITHUB_REPO_URL="${github_repo_url}"
 
-python3 --version
+log "Installing curl..."
 
-pip3 --version# Navigate to app directory
+apt-get install -y curl    echo "[$(date '+%Y-%m-%d %H:%M:%S')] $1" | tee -a $LOG_FILEAPP_NAME="${app_name}"
 
-cd $APP_DIR
+
+
+log "Installing supervisor..."}GITHUB_TOKEN="${github_token}"
+
+apt-get install -y supervisor
+
+ADMIN_USER="${admin_username}"
+
+log "Installing firewall utilities..."
+
+apt-get install -y ufwlog "Starting VM setup for $APP_NAME"APP_DIR="/home/$ADMIN_USER/$APP_NAME"
+
+
+
+log "Installing monitoring tools..."SERVICE_NAME="$APP_NAME"
+
+apt-get install -y htop
+
+# Update package lists and system
+
+log "Installing unzip..."
+
+apt-get install -y unziplog "Updating system packages..."# Logging function
+
+
+
+permissive_modeapt-get update -ylog() {
+
+
+
+# Verify Python installation    echo "[$(date '+%Y-%m-%d %H:%M:%S')] $1" | tee -a /var/log/app-setup.log
+
+log "Verifying Python installation..."
+
+python3 --version# Ensure universe repository is enabled (required for some packages)}
+
+pip3 --version
+
+log "Enabling universe repository..."
 
 # Configure firewall
 
-log "Configuring firewall..."# Create Python virtual environment
+log "Configuring firewall..."add-apt-repository universe -ylog "Starting VM setup for $APP_NAME"
 
-ufw allow OpenSSHlog "Setting up Python virtual environment..."
+ufw allow OpenSSH
 
-ufw allow 'Nginx Full'sudo -u $ADMIN_USER python3 -m venv venv
+ufw allow 'Nginx Full'apt-get update -y
 
-ufw allow 5000  # Flask default portsudo -u $ADMIN_USER $APP_DIR/venv/bin/pip install --upgrade pip
+ufw allow 5000  # Flask default port
 
-ufw --force enable
+ufw --force enable# Configure firewall
 
-# Install Python dependencies
 
-# Create application directorylog "Installing Python dependencies..."
+
+# Create application directory# Upgrade system packageslog "Configuring firewall..."
 
 log "Setting up application directory..."
 
-mkdir -p $APP_DIR# Check repository structure and organize files
+mkdir -p $APP_DIRapt-get upgrade -yufw allow OpenSSH
 
-chown $ADMIN_USER:$ADMIN_USER $APP_DIRlog "Analyzing repository structure..."
+chown $ADMIN_USER:$ADMIN_USER $APP_DIR
 
-ls -la $APP_DIR/
+ufw allow 'Nginx Full'
 
 # Clone GitHub repository (critical operation)
 
-strict_mode# Check if we have sample-python-app directory structure
+strict_mode# Install required packages with better error handlingufw allow 5000  # Flask default port
 
-log "Cloning GitHub repository..."if [ -d "$APP_DIR/sample-python-app" ]; then
+log "Cloning GitHub repository..."
 
-cd /home/$ADMIN_USER    log "Found sample-python-app directory structure"
+cd /home/$ADMIN_USERlog "Installing required packages..."ufw --force enable
+
+
+
+# Debug: Show what we're about to clonestrict_mode
+
+log "GitHub Repository URL: $GITHUB_REPO_URL"
+
+log "GitHub Token present: $(if [ ! -z "$GITHUB_TOKEN" ]; then echo "YES"; else echo "NO"; fi)"# Create application directory
+
+
+
+if [ ! -z "$GITHUB_TOKEN" ]; then# Install critical packages one by one for better error handlinglog "Setting up application directory..."
+
+    # Use token for private repositories
+
+    REPO_URL_WITH_TOKEN=$(echo $GITHUB_REPO_URL | sed "s|https://|https://$GITHUB_TOKEN@|")log "Installing Python3..."mkdir -p $APP_DIR
+
+    log "Cloning private repository with token..."
+
+    sudo -u $ADMIN_USER git clone $REPO_URL_WITH_TOKEN $APP_NAMEapt-get install -y python3chown $ADMIN_USER:$ADMIN_USER $APP_DIR
+
+else
+
+    # Public repository
+
+    log "Cloning public repository..."
+
+    sudo -u $ADMIN_USER git clone $GITHUB_REPO_URL $APP_NAMElog "Installing pip..."# Clone GitHub repository
+
+fi
+
+apt-get install -y python3-piplog "Cloning GitHub repository..."
+
+# Verify clone was successful
+
+if [ ! -d "$APP_NAME" ]; thencd /home/$ADMIN_USER
+
+    log "ERROR: Failed to clone repository!"
+
+    log "Repository URL: $GITHUB_REPO_URL"log "Installing python3-venv..."
+
+    log "Available directories in /home/$ADMIN_USER:"
+
+    ls -la /home/$ADMIN_USER/apt-get install -y python3-venv# Remove existing directory if it exists
+
+    exit 1
+
+fiif [ -d "$APP_NAME" ]; then
+
+
+
+log "Repository cloned successfully"log "Installing nginx..."    log "Removing existing application directory..."
+
+permissive_mode
+
+apt-get install -y nginx    rm -rf $APP_NAME
+
+# Navigate to app directory
+
+cd $APP_DIRfi
+
+
+
+# Create Python virtual environment (critical)log "Installing git..."
+
+strict_mode
+
+log "Setting up Python virtual environment..."apt-get install -y gitif [ ! -z "$GITHUB_TOKEN" ]; then
+
+sudo -u $ADMIN_USER python3 -m venv venv
+
+sudo -u $ADMIN_USER $APP_DIR/venv/bin/pip install --upgrade pip    # Use token for private repositories
+
+
+
+# Install Python dependencies (critical)log "Installing curl..."    REPO_URL_WITH_TOKEN=$(echo $GITHUB_REPO_URL | sed "s|https://|https://$GITHUB_TOKEN@|")
+
+log "Installing Python dependencies..."
+
+if [ -f "requirements.txt" ]; thenapt-get install -y curl    log "Cloning private repository with token..."
+
+    sudo -u $ADMIN_USER $APP_DIR/venv/bin/pip install -r requirements.txt
+
+else    sudo -u $ADMIN_USER git clone $REPO_URL_WITH_TOKEN $APP_NAME
+
+    # Install basic Flask dependencies if no requirements.txt
+
+    sudo -u $ADMIN_USER $APP_DIR/venv/bin/pip install flask gunicorn psutillog "Installing supervisor..."else
+
+fi
+
+permissive_modeapt-get install -y supervisor    # Public repository
+
+
+
+# Test if app can import successfully    log "Cloning public repository..."
+
+log "Testing Flask application..."
+
+cd $APP_DIRlog "Installing firewall utilities..."    sudo -u $ADMIN_USER git clone $GITHUB_REPO_URL $APP_NAME
+
+if sudo -u $ADMIN_USER $APP_DIR/venv/bin/python -c "import app; print('App imports successfully')" 2>/dev/null; then
+
+    log "✅ App imports successfully"apt-get install -y ufwfi
+
+else
+
+    log "⚠️  App failed to import initially - attempting to install missing dependencies"
+
+    # Try to install missing dependencies
+
+    sudo -u $ADMIN_USER $APP_DIR/venv/bin/pip install psutillog "Installing monitoring tools..."# Verify the clone was successful
 
     
 
-if [ ! -z "$GITHUB_TOKEN" ]; then    # Copy application files to the root directory
+    # Test againapt-get install -y htopif [ ! -d "$APP_NAME" ]; then
 
-    # Use token for private repositories    log "Copying application files from sample-python-app to root..."
+    if sudo -u $ADMIN_USER $APP_DIR/venv/bin/python -c "import app; print('App imports successfully')" 2>/dev/null; then
 
-    REPO_URL_WITH_TOKEN=$(echo $GITHUB_REPO_URL | sed "s|https://|https://$GITHUB_TOKEN@|")    sudo -u $ADMIN_USER cp -r $APP_DIR/sample-python-app/* $APP_DIR/
+        log "✅ App imports successfully after installing dependencies"    log "❌ ERROR: Failed to clone repository!"
 
-    sudo -u $ADMIN_USER git clone $REPO_URL_WITH_TOKEN $APP_NAME    
+    else
 
-else    # Verify the copy was successful
+        log "⚠️  App still fails to import - continuing with setup (app might start later)"log "Installing unzip..."    log "Repository URL: $GITHUB_REPO_URL"
 
-    # Public repository    log "Files after copying:"
+        # Don't exit here - the app might work when properly configured
 
-    sudo -u $ADMIN_USER git clone $GITHUB_REPO_URL $APP_NAME    ls -la $APP_DIR/*.py 2>/dev/null || log "No Python files found after copying"
+    fiapt-get install -y unzip    exit 1
 
-fi    
+fi
 
-permissive_mode    # Install dependencies from sample-python-app if it exists
+fi
 
-    if [ -f "$APP_DIR/sample-python-app/requirements.txt" ]; then
+# Create Gunicorn configuration
 
-# Navigate to app directory        log "Installing dependencies from sample-python-app/requirements.txt..."
+log "Creating Gunicorn configuration..."permissive_mode
 
-cd $APP_DIR        sudo -u $ADMIN_USER $APP_DIR/venv/bin/pip install -r $APP_DIR/sample-python-app/requirements.txt
+cat > /etc/supervisor/conf.d/$SERVICE_NAME.conf << EOF
 
-    elif [ -f "$APP_DIR/requirements.txt" ]; then
-
-# Create Python virtual environment (critical)        log "Installing dependencies from requirements.txt..."
-
-strict_mode        sudo -u $ADMIN_USER $APP_DIR/venv/bin/pip install -r $APP_DIR/requirements.txt
-
-log "Setting up Python virtual environment..."    else
-
-sudo -u $ADMIN_USER python3 -m venv venv        log "No requirements.txt found, installing basic dependencies..."
-
-sudo -u $ADMIN_USER $APP_DIR/venv/bin/pip install --upgrade pip        sudo -u $ADMIN_USER $APP_DIR/venv/bin/pip install flask gunicorn psutil
-
-    fi
-
-# Install Python dependencies (critical)else
-
-log "Installing Python dependencies..."    log "Using direct application structure"
-
-if [ -f "requirements.txt" ]; then    
-
-    sudo -u $ADMIN_USER $APP_DIR/venv/bin/pip install -r requirements.txt    # Check if app.py exists in root
-
-else    if [ -f "$APP_DIR/app.py" ]; then
-
-    # Install basic Flask dependencies if no requirements.txt        log "✅ Found app.py in root directory"
-
-    sudo -u $ADMIN_USER $APP_DIR/venv/bin/pip install flask gunicorn psutil    else
-
-fi        log "❌ app.py not found in root directory"
-
-permissive_mode        log "Available files:"
-
-        ls -la $APP_DIR/
-
-# Test if app can import successfully        
-
-log "Testing Flask application..."        # Try to find app.py in subdirectories
-
-cd $APP_DIR        APP_PY_LOCATION=$(find $APP_DIR -name "app.py" -type f | head -1)
-
-if sudo -u $ADMIN_USER $APP_DIR/venv/bin/python -c "import app; print('App imports successfully')" 2>/dev/null; then        if [ -n "$APP_PY_LOCATION" ]; then
-
-    log "✅ App imports successfully"            log "Found app.py at: $APP_PY_LOCATION"
-
-else            APP_PY_DIR=$(dirname "$APP_PY_LOCATION")
-
-    log "⚠️  App failed to import initially - attempting to install missing dependencies"            log "Copying files from $APP_PY_DIR to root..."
-
-    # Try to install missing dependencies            sudo -u $ADMIN_USER cp -r $APP_PY_DIR/* $APP_DIR/
-
-    sudo -u $ADMIN_USER $APP_DIR/venv/bin/pip install psutil        else
-
-                log "❌ ERROR: app.py not found anywhere in the repository!"
-
-    # Test again            exit 1
-
-    if sudo -u $ADMIN_USER $APP_DIR/venv/bin/python -c "import app; print('App imports successfully')" 2>/dev/null; then        fi
-
-        log "✅ App imports successfully after installing dependencies"    fi
-
-    else    
-
-        log "⚠️  App still fails to import - continuing with setup (app might start later)"    if [ -f "$APP_DIR/requirements.txt" ]; then
-
-        # Don't exit here - the app might work when properly configured        log "Installing dependencies from requirements.txt..."
-
-    fi        sudo -u $ADMIN_USER $APP_DIR/venv/bin/pip install -r $APP_DIR/requirements.txt
-
-fi    else
-
-        # Install basic Flask dependencies if no requirements.txt
-
-# Create Gunicorn configuration        log "No requirements.txt found, installing basic dependencies..."
-
-log "Creating Gunicorn configuration..."        sudo -u $ADMIN_USER $APP_DIR/venv/bin/pip install flask gunicorn psutil
-
-cat > /etc/supervisor/conf.d/$SERVICE_NAME.conf << EOF    fi
-
-[program:$SERVICE_NAME]fi
+[program:$SERVICE_NAME]log "✅ Repository cloned successfully"
 
 command=$APP_DIR/venv/bin/gunicorn --bind 127.0.0.1:5000 --workers 2 --timeout 120 --log-level info app:app
 
-directory=$APP_DIR# Final verification of application files
+directory=$APP_DIR# Verify Python installationlog "Repository contents:"
 
-user=$ADMIN_USERlog "Final verification of application files..."
+user=$ADMIN_USER
 
-autostart=trueif [ -f "$APP_DIR/app.py" ]; then
+autostart=truelog "Verifying Python installation..."ls -la /home/$ADMIN_USER/$APP_NAME/
 
-autorestart=true    log "✅ app.py found successfully"
+autorestart=true
 
-redirect_stderr=true    log "File size: $(stat -c%s $APP_DIR/app.py) bytes"
+redirect_stderr=truepython3 --version
 
-stdout_logfile=/var/log/$SERVICE_NAME.logelse
+stdout_logfile=/var/log/$SERVICE_NAME.log
 
-EOF    log "❌ CRITICAL ERROR: app.py still not found after setup!"
+EOFpip3 --version# Navigate to app directory
 
-    log "Current directory contents:"
 
-# Create Nginx configuration    ls -la $APP_DIR/
 
-log "Configuring Nginx..."    exit 1
+# Create Nginx configurationcd $APP_DIR
 
-cat > /etc/nginx/sites-available/$SERVICE_NAME << EOFfi
+log "Configuring Nginx..."
+
+cat > /etc/nginx/sites-available/$SERVICE_NAME << EOF# Configure firewall
 
 server {
 
-    listen 80;# Test if app can import successfully
+    listen 80;log "Configuring firewall..."# Create Python virtual environment
 
-    server_name _;log "Testing Flask application..."
+    server_name _;
 
-cd $APP_DIR
+ufw allow OpenSSHlog "Setting up Python virtual environment..."
 
+    location / {
+
+        proxy_pass http://127.0.0.1:5000;ufw allow 'Nginx Full'sudo -u $ADMIN_USER python3 -m venv venv
+
+        proxy_set_header Host \$host;
+
+        proxy_set_header X-Real-IP \$remote_addr;ufw allow 5000  # Flask default portsudo -u $ADMIN_USER $APP_DIR/venv/bin/pip install --upgrade pip
+
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+
+        proxy_set_header X-Forwarded-Proto \$scheme;ufw --force enable
+
+        proxy_connect_timeout 60s;
+
+        proxy_send_timeout 60s;# Install Python dependencies
+
+        proxy_read_timeout 60s;
+
+    }# Create application directorylog "Installing Python dependencies..."
+
+
+
+    location /health {log "Setting up application directory..."
+
+        proxy_pass http://127.0.0.1:5000/health;
+
+        proxy_set_header Host \$host;mkdir -p $APP_DIR# Check repository structure and organize files
+
+        proxy_set_header X-Real-IP \$remote_addr;
+
+    }chown $ADMIN_USER:$ADMIN_USER $APP_DIRlog "Analyzing repository structure..."
+
+
+
+    # Static files (if any)ls -la $APP_DIR/
+
+    location /static {
+
+        alias $APP_DIR/static;# Clone GitHub repository (critical operation)
+
+        expires 30d;
+
+        add_header Cache-Control "public, immutable";strict_mode# Check if we have sample-python-app directory structure
+
+    }
+
+}log "Cloning GitHub repository..."if [ -d "$APP_DIR/sample-python-app" ]; then
+
+EOF
+
+cd /home/$ADMIN_USER    log "Found sample-python-app directory structure"
+
+# Enable Nginx site
+
+ln -sf /etc/nginx/sites-available/$SERVICE_NAME /etc/nginx/sites-enabled/    
+
+rm -f /etc/nginx/sites-enabled/default
+
+if [ ! -z "$GITHUB_TOKEN" ]; then    # Copy application files to the root directory
+
+# Test Nginx configuration
+
+nginx -t    # Use token for private repositories    log "Copying application files from sample-python-app to root..."
+
+
+
+# Create a simple systemd service as backup    REPO_URL_WITH_TOKEN=$(echo $GITHUB_REPO_URL | sed "s|https://|https://$GITHUB_TOKEN@|")    sudo -u $ADMIN_USER cp -r $APP_DIR/sample-python-app/* $APP_DIR/
+
+log "Creating systemd service..."
+
+cat > /etc/systemd/system/$SERVICE_NAME.service << EOF    sudo -u $ADMIN_USER git clone $REPO_URL_WITH_TOKEN $APP_NAME    
+
+[Unit]
+
+Description=$APP_NAME Flask Applicationelse    # Verify the copy was successful
+
+After=network.target
+
+    # Public repository    log "Files after copying:"
+
+[Service]
+
+Type=simple    sudo -u $ADMIN_USER git clone $GITHUB_REPO_URL $APP_NAME    ls -la $APP_DIR/*.py 2>/dev/null || log "No Python files found after copying"
+
+User=$ADMIN_USER
+
+WorkingDirectory=$APP_DIRfi    
+
+Environment=PATH=$APP_DIR/venv/bin
+
+ExecStart=$APP_DIR/venv/bin/gunicorn --bind 127.0.0.1:5000 --workers 3 app:apppermissive_mode    # Install dependencies from sample-python-app if it exists
+
+Restart=always
+
+RestartSec=10    if [ -f "$APP_DIR/sample-python-app/requirements.txt" ]; then
+
+
+
+[Install]# Navigate to app directory        log "Installing dependencies from sample-python-app/requirements.txt..."
+
+WantedBy=multi-user.target
+
+EOFcd $APP_DIR        sudo -u $ADMIN_USER $APP_DIR/venv/bin/pip install -r $APP_DIR/sample-python-app/requirements.txt
+
+
+
+# Start services    elif [ -f "$APP_DIR/requirements.txt" ]; then
+
+log "Starting services..."
+
+# Create Python virtual environment (critical)        log "Installing dependencies from requirements.txt..."
+
+# Start Supervisor
+
+systemctl enable supervisorstrict_mode        sudo -u $ADMIN_USER $APP_DIR/venv/bin/pip install -r $APP_DIR/requirements.txt
+
+systemctl start supervisor
+
+sleep 5log "Setting up Python virtual environment..."    else
+
+
+
+# Check if Supervisor started correctlysudo -u $ADMIN_USER python3 -m venv venv        log "No requirements.txt found, installing basic dependencies..."
+
+if systemctl is-active --quiet supervisor; then
+
+    log "✅ Supervisor started successfully"sudo -u $ADMIN_USER $APP_DIR/venv/bin/pip install --upgrade pip        sudo -u $ADMIN_USER $APP_DIR/venv/bin/pip install flask gunicorn psutil
+
+    
+
+    # Start the application    fi
+
+    supervisorctl reread
+
+    supervisorctl update# Install Python dependencies (critical)else
+
+    supervisorctl start $SERVICE_NAME
+
+    log "Installing Python dependencies..."    log "Using direct application structure"
+
+    # Check application status
+
+    sleep 5if [ -f "requirements.txt" ]; then    
+
+    if supervisorctl status $SERVICE_NAME | grep -q "RUNNING"; then
+
+        log "✅ Application started successfully"    sudo -u $ADMIN_USER $APP_DIR/venv/bin/pip install -r requirements.txt    # Check if app.py exists in root
+
+    else
+
+        log "❌ Application failed to start. Check logs: /var/log/$SERVICE_NAME.log"else    if [ -f "$APP_DIR/app.py" ]; then
+
+    fi
+
+else    # Install basic Flask dependencies if no requirements.txt        log "✅ Found app.py in root directory"
+
+    log "❌ Supervisor failed to start"
+
+    systemctl status supervisor --no-pager -l    sudo -u $ADMIN_USER $APP_DIR/venv/bin/pip install flask gunicorn psutil    else
+
+fi
+
+fi        log "❌ app.py not found in root directory"
+
+# Start Nginx
+
+systemctl enable nginxpermissive_mode        log "Available files:"
+
+systemctl start nginx
+
+        ls -la $APP_DIR/
+
+if systemctl is-active --quiet nginx; then
+
+    log "✅ Nginx started successfully"# Test if app can import successfully        
+
+else
+
+    log "❌ Nginx failed to start"log "Testing Flask application..."        # Try to find app.py in subdirectories
+
+    systemctl status nginx --no-pager -l
+
+ficd $APP_DIR        APP_PY_LOCATION=$(find $APP_DIR -name "app.py" -type f | head -1)
+
+
+
+systemctl daemon-reloadif sudo -u $ADMIN_USER $APP_DIR/venv/bin/python -c "import app; print('App imports successfully')" 2>/dev/null; then        if [ -n "$APP_PY_LOCATION" ]; then
+
+systemctl enable $SERVICE_NAME
+
+    log "✅ App imports successfully"            log "Found app.py at: $APP_PY_LOCATION"
+
+# Create health check script
+
+cat > $APP_DIR/health_check.sh << EOFelse            APP_PY_DIR=$(dirname "$APP_PY_LOCATION")
+
+#!/bin/bash
+
+echo "Testing Flask app directly..."    log "⚠️  App failed to import initially - attempting to install missing dependencies"            log "Copying files from $APP_PY_DIR to root..."
+
+curl -f http://localhost:5000/health || exit 1
+
+echo "Testing through nginx..."    # Try to install missing dependencies            sudo -u $ADMIN_USER cp -r $APP_PY_DIR/* $APP_DIR/
+
+curl -f http://localhost/health || exit 1
+
+echo "✅ All health checks passed!"    sudo -u $ADMIN_USER $APP_DIR/venv/bin/pip install psutil        else
+
+EOF
+
+                log "❌ ERROR: app.py not found anywhere in the repository!"
+
+chmod +x $APP_DIR/health_check.sh
+
+chown $ADMIN_USER:$ADMIN_USER $APP_DIR/health_check.sh    # Test again            exit 1
+
+
+
+# Final status check    if sudo -u $ADMIN_USER $APP_DIR/venv/bin/python -c "import app; print('App imports successfully')" 2>/dev/null; then        fi
+
+log "Performing final status check..."
+
+sleep 10        log "✅ App imports successfully after installing dependencies"    fi
+
+
+
+if supervisorctl status $SERVICE_NAME | grep -q "RUNNING"; then    else    
+
+    log "✅ Application is running successfully"
+
+else        log "⚠️  App still fails to import - continuing with setup (app might start later)"    if [ -f "$APP_DIR/requirements.txt" ]; then
+
+    log "❌ Application failed to start. Check logs: /var/log/$SERVICE_NAME.log"
+
+fi        # Don't exit here - the app might work when properly configured        log "Installing dependencies from requirements.txt..."
+
+
+
+if systemctl is-active --quiet nginx; then    fi        sudo -u $ADMIN_USER $APP_DIR/venv/bin/pip install -r $APP_DIR/requirements.txt
+
+    log "✅ Nginx is running successfully"
+
+elsefi    else
+
+    log "❌ Nginx failed to start. Check logs: journalctl -u nginx"
+
+fi        # Install basic Flask dependencies if no requirements.txt
+
+
+
+# Display useful information# Create Gunicorn configuration        log "No requirements.txt found, installing basic dependencies..."
+
+log "Setup completed!"
+
+# Get public IP safelylog "Creating Gunicorn configuration..."        sudo -u $ADMIN_USER $APP_DIR/venv/bin/pip install flask gunicorn psutil
+
+PUBLIC_IP=$(curl -s --max-time 10 ifconfig.me 2>/dev/null || echo "Unable to determine public IP")
+
+log "Application URL: http://$PUBLIC_IP/"cat > /etc/supervisor/conf.d/$SERVICE_NAME.conf << EOF    fi
+
+log "Application logs: /var/log/$SERVICE_NAME.log"
+
+log "Nginx logs: /var/log/nginx/"[program:$SERVICE_NAME]fi
+
+log "To check health: cd $APP_DIR && ./health_check.sh"
+
+command=$APP_DIR/venv/bin/gunicorn --bind 127.0.0.1:5000 --workers 2 --timeout 120 --log-level info app:app
+
+# Create status script for easy monitoring
+
+cat > /home/$ADMIN_USER/status.sh << EOFdirectory=$APP_DIR# Final verification of application files
+
+#!/bin/bash
+
+echo "=== System Status ==="user=$ADMIN_USERlog "Final verification of application files..."
+
+echo "Date: \$(date)"
+
+echo ""autostart=trueif [ -f "$APP_DIR/app.py" ]; then
+
+echo "=== Service Status ==="
+
+supervisorctl status $SERVICE_NAMEautorestart=true    log "✅ app.py found successfully"
+
+systemctl status nginx --no-pager -l
+
+echo ""redirect_stderr=true    log "File size: $(stat -c%s $APP_DIR/app.py) bytes"
+
+echo "=== Application Health ==="
+
+$APP_DIR/health_check.shstdout_logfile=/var/log/$SERVICE_NAME.logelse
+
+echo ""
+
+echo "=== System Resources ==="EOF    log "❌ CRITICAL ERROR: app.py still not found after setup!"
+
+df -h | grep -E "(Filesystem|/dev/)"
+
+free -h    log "Current directory contents:"
+
+echo ""
+
+echo "=== Recent Logs ==="# Create Nginx configuration    ls -la $APP_DIR/
+
+echo "--- Application Logs (last 5 lines) ---"
+
+tail -5 /var/log/$SERVICE_NAME.loglog "Configuring Nginx..."    exit 1
+
+echo "--- Nginx Access Logs (last 5 lines) ---"
+
+tail -5 /var/log/nginx/access.logcat > /etc/nginx/sites-available/$SERVICE_NAME << EOFfi
+
+EOF
+
+server {
+
+chmod +x /home/$ADMIN_USER/status.sh
+
+chown $ADMIN_USER:$ADMIN_USER /home/$ADMIN_USER/status.sh    listen 80;# Test if app can import successfully
+
+
+
+log "VM setup completed successfully! 🎉"    server_name _;log "Testing Flask application..."
+
+
+
+# Ensure script exits successfullycd $APP_DIR
+
+exit 0
     location / {sudo -u $ADMIN_USER $APP_DIR/venv/bin/python -c "import app; print('✅ App imports successfully')" || {
 
         proxy_pass http://127.0.0.1:5000;    log "❌ ERROR: App failed to import!"
