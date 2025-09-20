@@ -10,11 +10,11 @@ set -e
 
 # Variables from Terraform
 
-GITHUB_REPO_URL="${github_repo_url}"# Simple and robust version to avoid templating issues
+GITHUB_REPO_URL="${github_repo_url}" # Simple and robust version to avoid templating issues
 
 APP_NAME="${app_name}"
 
-GITHUB_TOKEN="${github_token}"# VM Setup Script for Python Flask App with Nginx
+GITHUB_TOKEN="${github_token}" # VM Setup Script for Python Flask App with Nginx
 
 ADMIN_USER="${admin_username}"
 
@@ -22,7 +22,7 @@ set -e  # Exit on any error
 
 # Derived variables
 
-APP_DIR="/home/$ADMIN_USER/$APP_NAME"# This script sets up the VM environment, clones the GitHub repo, and deploys the Python application
+APP_DIR="/home/$ADMIN_USER/$APP_NAME" # This script sets up the VM environment, clones the GitHub repo, and deploys the Python application
 
 SERVICE_NAME="$APP_NAME"
 
@@ -78,7 +78,10 @@ log "Configuring firewall..."log() {
 
 ufw allow OpenSSH
 
-ufw allow 'Nginx Full'    echo "[$(date '+%Y-%m-%d %H:%M:%S')] $1" | tee -a $LOG_FILE    set -e# Don't exit on every error - handle critical vs non-critical operations separately
+ufw allow 'Nginx Full'
+echo "[$(date '+%Y-%m-%d %H:%M:%S')] $1" | tee -a $LOG_FILE
+set -e  # Don't exit on every error - handle critical vs non-critical operations separately
+
 
 ufw allow 5000
 
@@ -94,7 +97,7 @@ mkdir -p $APP_DIR# Start logging
 
 chown $ADMIN_USER:$ADMIN_USER $APP_DIR
 
-log "=== VM Setup Started ==="set +e# Ensure universe repository is enabled (required for some packages)
+log "=== VM Setup Started ==="set +e # Ensure universe repository is enabled (required for some packages)
 
 # Clone repository
 
@@ -126,7 +129,7 @@ if [ ! -d "$APP_NAME" ]; then
 
     exit 1
 
-fiapt-get update -y}# Set strict mode for critical operations when neededadd-apt-repository universe -y
+fiapt-get update -y} # Set strict mode for critical operations when neededadd-apt-repository universe -y
 
 
 
