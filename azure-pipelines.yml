@@ -22,8 +22,9 @@ variables:
   python_version: '3.11'
   
   # Azure Service Connection Configuration
-  # Service connection 'Ankitdevops' is configured in Azure DevOps
-  azureServiceConnection: 'Ankitdevops'
+  # Service connection 'annkitsubserviceconnection' is configured in Azure DevOps
+  azureServiceConnection: 'annkitsubserviceconnection'
+  azureSubscriptionId: '1c756cca-f6af-4af6-b2a3-cd9e449ade18'
   
   # Application Configuration
   app_name: 'python-flask-app'
@@ -181,6 +182,12 @@ stages:
                 UNIQUE_SUFFIX=$(echo $(Build.BuildId) | tail -c 5)
                 RESOURCE_GROUP_NAME="$(resource_group_prefix)-$UNIQUE_SUFFIX"
                 VM_NAME="$(vm_name_prefix)-$UNIQUE_SUFFIX"
+                # Set a fixed resource name for a persistent development environment.
+                # This avoids creating new resources on every run and hitting subscription limits.
+                # Terraform will intelligently update the existing resources.
+                ENVIRONMENT_NAME="dev"
+                RESOURCE_GROUP_NAME="$(resource_group_prefix)-${ENVIRONMENT_NAME}"
+                VM_NAME="$(vm_name_prefix)-${ENVIRONMENT_NAME}"
                 
                 echo "Resource Group: $RESOURCE_GROUP_NAME"
                 echo "VM Name: $VM_NAME"
@@ -219,6 +226,7 @@ stages:
                   -var="github_repo_url=$(Build.Repository.Uri)" \
                   -var="app_name=$(app_name)" \
                   -var="github_token=" \
+                  -var="subscription_id=$(azureSubscriptionId)" \
                   -out=tfplan
                 
                 # Apply deployment
