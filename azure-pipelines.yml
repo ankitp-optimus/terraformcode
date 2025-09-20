@@ -586,9 +586,39 @@ stages:
         if python -c "import app; print('✅ App imports successfully')" 2>/dev/null; then
             echo "✅ Application import successful"
         else
-            echo "❌ Application import failed, checking available files..."
-            ls -la *.py 2>/dev/null || echo "No Python files found"
-            exit 1
+            echo "❌ Application import failed, attempting to fix..."
+            echo "Current directory contents:"
+            ls -la
+            
+            # Try to find and copy app.py if it exists elsewhere
+            if [ -f "sample-python-app/app.py" ]; then
+                echo "Found app.py in sample-python-app, copying..."
+                cp -r sample-python-app/* .
+                echo "Files after copying:"
+                ls -la *.py 2>/dev/null || echo "Still no Python files found"
+            else
+                echo "Searching for app.py in subdirectories..."
+                find . -name "app.py" -type f || echo "app.py not found anywhere"
+                
+                # If still not found, try to re-clone the repository
+                echo "Attempting to re-clone repository..."
+                cd /home/$(admin_username)
+                if [ -d "terraformcode" ]; then
+                    echo "Found terraformcode directory, copying files..."
+                    cp -r terraformcode/sample-python-app/* \$APP_DIR/ 2>/dev/null || echo "Copy failed"
+                fi
+                cd \$APP_DIR
+            fi
+            
+            # Test again after attempting fixes
+            if python -c "import app; print('✅ App imports successfully after fix')" 2>/dev/null; then
+                echo "✅ Application import successful after fix"
+            else
+                echo "❌ Application import still failed"
+                echo "Final directory contents:"
+                ls -la
+                exit 1
+            fi
         fi
         
         # Restart application service

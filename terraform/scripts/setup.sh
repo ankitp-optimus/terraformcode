@@ -55,14 +55,33 @@ chown $ADMIN_USER:$ADMIN_USER $APP_DIR
 log "Cloning GitHub repository..."
 cd /home/$ADMIN_USER
 
+# Remove existing directory if it exists
+if [ -d "$APP_NAME" ]; then
+    log "Removing existing application directory..."
+    rm -rf $APP_NAME
+fi
+
 if [ ! -z "$GITHUB_TOKEN" ]; then
     # Use token for private repositories
     REPO_URL_WITH_TOKEN=$(echo $GITHUB_REPO_URL | sed "s|https://|https://$GITHUB_TOKEN@|")
+    log "Cloning private repository with token..."
     sudo -u $ADMIN_USER git clone $REPO_URL_WITH_TOKEN $APP_NAME
 else
     # Public repository
+    log "Cloning public repository..."
     sudo -u $ADMIN_USER git clone $GITHUB_REPO_URL $APP_NAME
 fi
+
+# Verify the clone was successful
+if [ ! -d "$APP_NAME" ]; then
+    log "❌ ERROR: Failed to clone repository!"
+    log "Repository URL: $GITHUB_REPO_URL"
+    exit 1
+fi
+
+log "✅ Repository cloned successfully"
+log "Repository contents:"
+ls -la /home/$ADMIN_USER/$APP_NAME/
 
 # Navigate to app directory
 cd $APP_DIR
@@ -75,6 +94,10 @@ sudo -u $ADMIN_USER $APP_DIR/venv/bin/pip install --upgrade pip
 # Install Python dependencies
 log "Installing Python dependencies..."
 
+# Check repository structure and organize files
+log "Analyzing repository structure..."
+ls -la $APP_DIR/
+
 # Check if we have sample-python-app directory structure
 if [ -d "$APP_DIR/sample-python-app" ]; then
     log "Found sample-python-app directory structure"
@@ -82,6 +105,10 @@ if [ -d "$APP_DIR/sample-python-app" ]; then
     # Copy application files to the root directory
     log "Copying application files from sample-python-app to root..."
     sudo -u $ADMIN_USER cp -r $APP_DIR/sample-python-app/* $APP_DIR/
+    
+    # Verify the copy was successful
+    log "Files after copying:"
+    ls -la $APP_DIR/*.py 2>/dev/null || log "No Python files found after copying"
     
     # Install dependencies from sample-python-app if it exists
     if [ -f "$APP_DIR/sample-python-app/requirements.txt" ]; then
@@ -96,6 +123,28 @@ if [ -d "$APP_DIR/sample-python-app" ]; then
     fi
 else
     log "Using direct application structure"
+    
+    # Check if app.py exists in root
+    if [ -f "$APP_DIR/app.py" ]; then
+        log "✅ Found app.py in root directory"
+    else
+        log "❌ app.py not found in root directory"
+        log "Available files:"
+        ls -la $APP_DIR/
+        
+        # Try to find app.py in subdirectories
+        APP_PY_LOCATION=$(find $APP_DIR -name "app.py" -type f | head -1)
+        if [ -n "$APP_PY_LOCATION" ]; then
+            log "Found app.py at: $APP_PY_LOCATION"
+            APP_PY_DIR=$(dirname "$APP_PY_LOCATION")
+            log "Copying files from $APP_PY_DIR to root..."
+            sudo -u $ADMIN_USER cp -r $APP_PY_DIR/* $APP_DIR/
+        else
+            log "❌ ERROR: app.py not found anywhere in the repository!"
+            exit 1
+        fi
+    fi
+    
     if [ -f "$APP_DIR/requirements.txt" ]; then
         log "Installing dependencies from requirements.txt..."
         sudo -u $ADMIN_USER $APP_DIR/venv/bin/pip install -r $APP_DIR/requirements.txt
@@ -104,6 +153,18 @@ else
         log "No requirements.txt found, installing basic dependencies..."
         sudo -u $ADMIN_USER $APP_DIR/venv/bin/pip install flask gunicorn psutil
     fi
+fi
+
+# Final verification of application files
+log "Final verification of application files..."
+if [ -f "$APP_DIR/app.py" ]; then
+    log "✅ app.py found successfully"
+    log "File size: $(stat -c%s $APP_DIR/app.py) bytes"
+else
+    log "❌ CRITICAL ERROR: app.py still not found after setup!"
+    log "Current directory contents:"
+    ls -la $APP_DIR/
+    exit 1
 fi
 
 # Test if app can import successfully
