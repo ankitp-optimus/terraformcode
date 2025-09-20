@@ -377,9 +377,313 @@ stages:
               targetPath: '$(Agent.TempDirectory)/terraform-outputs'
               artifact: 'terraform-outputs'
 
-- stage: 'Validate_Deployment'
-  displayName: 'Validate Application Deployment'
+- stage: 'Deploy_Application'
+  displayName: 'Deploy Application to VM'
   dependsOn: 'Deploy'
+  variables:
+    vm_public_ip: $[ stageDependencies.Deploy.DeployInfrastructure.outputs['TerraformDeploy.vm_public_ip'] ]
+    ssh_connection: $[ stageDependencies.Deploy.DeployInfrastructure.outputs['TerraformDeploy.ssh_connection'] ]
+    resource_group_name: $[ stageDependencies.Deploy.DeployInfrastructure.outputs['TerraformDeploy.resource_group_name'] ]
+    vm_name: $[ stageDependencies.Deploy.DeployInfrastructure.outputs['TerraformDeploy.vm_name'] ]
+  
+  jobs:
+  - job: 'DeployToVM'
+    displayName: 'Deploy Application via SSH'
+    pool:
+      vmImage: 'ubuntu-latest'
+    
+    steps:
+    - checkout: self
+      displayName: 'Checkout Repository'
+    
+    - task: DownloadPipelineArtifact@2
+      displayName: 'Download SSH Keys'
+      inputs:
+        buildType: 'current'
+        artifactName: 'ssh-keys'
+        targetPath: '$(Agent.TempDirectory)/ssh-keys'
+    
+    - task: DownloadPipelineArtifact@2
+      displayName: 'Download Terraform Outputs (Fallback)'
+      inputs:
+        buildType: 'current'
+        artifactName: 'terraform-outputs'
+        targetPath: '$(Agent.TempDirectory)/terraform-outputs'
+    
+    - script: |
+        echo "=== APPLICATION DEPLOYMENT STAGE ==="
+        echo "VM Public IP: '$(vm_public_ip)'"
+        echo "SSH Connection: '$(ssh_connection)'"
+        echo "Resource Group: '$(resource_group_name)'"
+        echo "VM Name: '$(vm_name)'"
+        echo "===================================="
+        
+        # Load variables from artifact if pipeline variables are empty
+        if [ -z "$(vm_public_ip)" ] || [ "$(vm_public_ip)" = "" ]; then
+          echo "Loading variables from artifact..."
+          if [ -f "$(Agent.TempDirectory)/terraform-outputs/variables.txt" ]; then
+            VM_PUBLIC_IP_ARTIFACT=$(grep "^vm_public_ip=" $(Agent.TempDirectory)/terraform-outputs/variables.txt | cut -d'=' -f2-)
+            echo "##vso[task.setvariable variable=vm_public_ip_final]$VM_PUBLIC_IP_ARTIFACT"
+          fi
+        else
+          echo "##vso[task.setvariable variable=vm_public_ip_final]$(vm_public_ip)"
+        fi
+        
+        echo "Final VM IP: $(vm_public_ip_final)"
+      displayName: 'Prepare Deployment Variables'
+    
+    - script: |
+        echo "Setting up SSH connection..."
+        
+        # Setup SSH key
+        mkdir -p ~/.ssh
+        cp $(Agent.TempDirectory)/ssh-keys/ssh_private_key ~/.ssh/id_rsa
+        chmod 600 ~/.ssh/id_rsa
+        
+        VM_IP="$(vm_public_ip_final)"
+        
+        if [ -z "$VM_IP" ]; then
+          echo "❌ ERROR: VM IP is not available!"
+          exit 1
+        fi
+        
+        echo "Using VM IP: $VM_IP"
+        
+        # Add VM to known hosts
+        ssh-keyscan -H $VM_IP >> ~/.ssh/known_hosts
+        
+        # Test SSH connection
+        echo "Testing SSH connection..."
+        ssh -o ConnectTimeout=30 -o StrictHostKeyChecking=no $(admin_username)@$VM_IP "echo 'SSH connection successful!' && hostname"
+        
+        echo "✅ SSH connection established successfully!"
+      displayName: 'Setup SSH Connection'
+    
+    - script: |
+        echo "Waiting for VM initialization to complete..."
+        VM_IP="$(vm_public_ip_final)"
+        
+        # Wait for the VM extension script to complete (nginx installation)
+        echo "Checking if nginx is installed and running..."
+        for i in {1..30}; do
+          echo "Attempt $i/30: Checking nginx status..."
+          if ssh -o ConnectTimeout=30 $(admin_username)@$VM_IP "sudo systemctl is-active nginx >/dev/null 2>&1"; then
+            echo "✅ Nginx is running!"
+            break
+          else
+            echo "⏳ Nginx not ready yet, waiting 30 seconds..."
+            sleep 30
+          fi
+          
+          if [ $i -eq 30 ]; then
+            echo "❌ Nginx failed to start within 15 minutes"
+            echo "Checking nginx status..."
+            ssh -o ConnectTimeout=30 $(admin_username)@$VM_IP "sudo systemctl status nginx --no-pager -l" || true
+            exit 1
+          fi
+        done
+        
+        echo "✅ VM is ready for application deployment!"
+      displayName: 'Wait for VM Initialization'
+    
+    - script: |
+        echo "Checking VM setup status before deployment..."
+        VM_IP="$(vm_public_ip_final)"
+        
+        # Check VM setup status
+        echo "Verifying VM setup completion..."
+        ssh -o ConnectTimeout=30 $(admin_username)@$VM_IP "echo 'SSH connection working'"
+        
+        # Check if setup log exists and show recent entries
+        echo "Checking setup log..."
+        ssh -o ConnectTimeout=30 $(admin_username)@$VM_IP "tail -10 /var/log/app-setup.log 2>/dev/null || echo 'Setup log not found'"
+        
+        # Check basic services
+        echo "Checking basic services..."
+        ssh -o ConnectTimeout=30 $(admin_username)@$VM_IP "sudo systemctl is-active nginx && echo 'Nginx is active' || echo 'Nginx is not active'"
+        
+        echo "VM status check completed, proceeding with deployment..."
+      displayName: 'Check VM Status'
+    
+    - script: |
+        echo "Deploying application to VM..."
+        VM_IP="$(vm_public_ip_final)"
+        
+        # Create deployment script
+        cat > deploy_app.sh << 'EOF'
+        #!/bin/bash
+        set -e
+        
+        APP_NAME="${app_name}"
+        APP_DIR="/home/$(admin_username)/$APP_NAME"
+        
+        echo "=== APPLICATION DEPLOYMENT ==="
+        echo "App Name: $APP_NAME"
+        echo "App Directory: $APP_DIR"
+        echo "Current User: $(whoami)"
+        echo "=============================="
+        
+        # Check if app directory exists
+        if [ ! -d "$APP_DIR" ]; then
+            echo "❌ ERROR: Application directory not found: $APP_DIR"
+            echo "Available directories in /home/$(admin_username):"
+            ls -la /home/$(admin_username)/
+            exit 1
+        fi
+        
+        # Navigate to app directory
+        cd $APP_DIR
+        echo "Current directory: $(pwd)"
+        echo "Directory contents:"
+        ls -la
+        
+        # Check if this is a git repository and pull if possible
+        echo "Checking git repository status..."
+        if [ -d ".git" ]; then
+            echo "Git repository found, pulling latest changes..."
+            git pull origin main || git pull origin master || echo "⚠️ Git pull failed, continuing with existing code"
+        else
+            echo "⚠️ Not a git repository, skipping git pull"
+        fi
+        
+        # Check and setup virtual environment
+        echo "Checking virtual environment..."
+        if [ ! -f "venv/bin/activate" ]; then
+            echo "⚠️ Virtual environment not found, creating new one..."
+            python3 -m venv venv
+            echo "✅ Virtual environment created"
+        fi
+        
+        # Activate virtual environment
+        echo "Activating virtual environment..."
+        source venv/bin/activate
+        pip install --upgrade pip
+        
+        # Install dependencies based on available requirements.txt
+        echo "Installing Python dependencies..."
+        if [ -f "sample-python-app/requirements.txt" ]; then
+            echo "Installing from sample-python-app/requirements.txt..."
+            pip install -r sample-python-app/requirements.txt
+        elif [ -f "requirements.txt" ]; then
+            echo "Installing from requirements.txt..."
+            pip install -r requirements.txt
+        else
+            echo "No requirements.txt found, installing basic dependencies..."
+            pip install flask gunicorn psutil
+        fi
+        
+        # Copy application files if sample-python-app directory exists
+        if [ -d "sample-python-app" ]; then
+            echo "Copying application files from sample-python-app..."
+            cp -r sample-python-app/* .
+            echo "✅ Application files copied"
+        else
+            echo "⚠️ sample-python-app directory not found, assuming files are already in place"
+        fi
+        
+        # Test the application
+        echo "Testing application import..."
+        if python -c "import app; print('✅ App imports successfully')" 2>/dev/null; then
+            echo "✅ Application import successful"
+        else
+            echo "❌ Application import failed, checking available files..."
+            ls -la *.py 2>/dev/null || echo "No Python files found"
+            exit 1
+        fi
+        
+        # Restart application service
+        echo "Restarting application service..."
+        if sudo supervisorctl status $APP_NAME >/dev/null 2>&1; then
+            echo "Restarting with supervisor..."
+            sudo supervisorctl restart $APP_NAME
+            sleep 5
+            sudo supervisorctl status $APP_NAME
+        elif sudo systemctl is-enabled $APP_NAME >/dev/null 2>&1; then
+            echo "Restarting with systemctl..."
+            sudo systemctl restart $APP_NAME
+            sleep 5
+            sudo systemctl status $APP_NAME --no-pager -l
+        else
+            echo "⚠️ Service not found in supervisor or systemctl, checking if it's running..."
+            ps aux | grep -E "(gunicorn|python.*app)" | grep -v grep || echo "No application process found"
+        fi
+        
+        # Test and reload nginx
+        echo "Testing and reloading nginx..."
+        sudo nginx -t
+        sudo systemctl reload nginx
+        
+        # Wait for services to stabilize
+        sleep 10
+        
+        # Test application endpoints
+        echo "Testing application endpoints..."
+        if curl -f -s http://localhost/health >/dev/null 2>&1; then
+            echo "✅ Health endpoint OK"
+        else
+            echo "❌ Health endpoint failed"
+            echo "Checking if Flask is running on port 5000..."
+            curl -f -s http://localhost:5000/health >/dev/null 2>&1 && echo "Flask running on 5000" || echo "Flask not responding on 5000"
+        fi
+        
+        if curl -f -s http://localhost/ >/dev/null 2>&1; then
+            echo "✅ Home page OK"
+        else
+            echo "❌ Home page failed"
+        fi
+        
+        echo "✅ Application deployment completed successfully!"
+        EOF
+        
+        # Copy and execute deployment script on VM
+        scp deploy_app.sh $(admin_username)@$VM_IP:/tmp/
+        ssh $(admin_username)@$VM_IP "chmod +x /tmp/deploy_app.sh && /tmp/deploy_app.sh"
+        
+        echo "✅ Application deployed successfully!"
+      displayName: 'Deploy Application'
+    
+    - script: |
+        echo "Performing post-deployment validation..."
+        VM_IP="$(vm_public_ip_final)"
+        
+        # Test application endpoints from outside the VM
+        echo "Testing application from external access..."
+        
+        # Wait for application to be fully ready
+        sleep 30
+        
+        for i in {1..10}; do
+          echo "Attempt $i/10: Testing health endpoint..."
+          if curl -f -s "http://$VM_IP/health"; then
+            echo "✅ Application is healthy and accessible!"
+            break
+          else
+            echo "⏳ Application not ready yet, waiting 30 seconds..."
+            sleep 30
+          fi
+          
+          if [ $i -eq 10 ]; then
+            echo "❌ Application failed to respond within 5 minutes"
+            # Debug information
+            ssh $(admin_username)@$VM_IP "sudo supervisorctl status $(app_name) || sudo systemctl status $(app_name) --no-pager -l"
+            ssh $(admin_username)@$VM_IP "sudo systemctl status nginx --no-pager -l"
+            ssh $(admin_username)@$VM_IP "sudo tail -20 /var/log/$(app_name).log || echo 'No app logs found'"
+            exit 1
+          fi
+        done
+        
+        # Test other endpoints
+        echo "Testing additional endpoints..."
+        curl -f -s "http://$VM_IP/" > /dev/null && echo "✅ Home page OK" || echo "❌ Home page failed"
+        curl -f -s "http://$VM_IP/api/info" > /dev/null && echo "✅ API info OK" || echo "❌ API info failed"
+        curl -f -s "http://$VM_IP/api/hello?name=AzureDevOps" > /dev/null && echo "✅ API hello OK" || echo "❌ API hello failed"
+        
+        echo "✅ All post-deployment validations passed!"
+      displayName: 'Validate Deployment'
+
+- stage: 'Validate_Deployment'
+  displayName: 'Final Validation and Testing'
+  dependsOn: 'Deploy_Application'
   variables:
     vm_public_ip: $[ stageDependencies.Deploy.DeployInfrastructure.outputs['TerraformDeploy.vm_public_ip'] ]
     ssh_connection: $[ stageDependencies.Deploy.DeployInfrastructure.outputs['TerraformDeploy.ssh_connection'] ]
@@ -636,7 +940,7 @@ stages:
 
 - stage: 'Cleanup'
   displayName: 'Cleanup Resources (Optional)'
-  dependsOn: ['Deploy', 'Validate_Deployment']
+  dependsOn: ['Deploy', 'Deploy_Application', 'Validate_Deployment']
   condition: and(succeeded(), eq(variables['cleanup_resources'], 'true'))
   variables:
     resource_group_name: $[ stageDependencies.Deploy.DeployInfrastructure.outputs['TerraformDeploy.resource_group_name'] ]

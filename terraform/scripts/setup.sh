@@ -74,20 +74,55 @@ sudo -u $ADMIN_USER $APP_DIR/venv/bin/pip install --upgrade pip
 
 # Install Python dependencies
 log "Installing Python dependencies..."
-if [ -f "requirements.txt" ]; then
-    sudo -u $ADMIN_USER $APP_DIR/venv/bin/pip install -r requirements.txt
+
+# Check if we have sample-python-app directory structure
+if [ -d "$APP_DIR/sample-python-app" ]; then
+    log "Found sample-python-app directory structure"
+    
+    # Copy application files to the root directory
+    log "Copying application files from sample-python-app to root..."
+    sudo -u $ADMIN_USER cp -r $APP_DIR/sample-python-app/* $APP_DIR/
+    
+    # Install dependencies from sample-python-app if it exists
+    if [ -f "$APP_DIR/sample-python-app/requirements.txt" ]; then
+        log "Installing dependencies from sample-python-app/requirements.txt..."
+        sudo -u $ADMIN_USER $APP_DIR/venv/bin/pip install -r $APP_DIR/sample-python-app/requirements.txt
+    elif [ -f "$APP_DIR/requirements.txt" ]; then
+        log "Installing dependencies from requirements.txt..."
+        sudo -u $ADMIN_USER $APP_DIR/venv/bin/pip install -r $APP_DIR/requirements.txt
+    else
+        log "No requirements.txt found, installing basic dependencies..."
+        sudo -u $ADMIN_USER $APP_DIR/venv/bin/pip install flask gunicorn psutil
+    fi
 else
-    # Install basic Flask dependencies if no requirements.txt
-    sudo -u $ADMIN_USER $APP_DIR/venv/bin/pip install flask gunicorn psutil
+    log "Using direct application structure"
+    if [ -f "$APP_DIR/requirements.txt" ]; then
+        log "Installing dependencies from requirements.txt..."
+        sudo -u $ADMIN_USER $APP_DIR/venv/bin/pip install -r $APP_DIR/requirements.txt
+    else
+        # Install basic Flask dependencies if no requirements.txt
+        log "No requirements.txt found, installing basic dependencies..."
+        sudo -u $ADMIN_USER $APP_DIR/venv/bin/pip install flask gunicorn psutil
+    fi
 fi
 
 # Test if app can import successfully
 log "Testing Flask application..."
 cd $APP_DIR
-sudo -u $ADMIN_USER $APP_DIR/venv/bin/python -c "import app; print('App imports successfully')" || {
-    log "ERROR: App failed to import!"
-    # Try to install missing dependencies
-    sudo -u $ADMIN_USER $APP_DIR/venv/bin/pip install psutil
+sudo -u $ADMIN_USER $APP_DIR/venv/bin/python -c "import app; print('✅ App imports successfully')" || {
+    log "❌ ERROR: App failed to import!"
+    log "Checking current directory contents:"
+    ls -la $APP_DIR
+    log "Trying to install missing dependencies..."
+    sudo -u $ADMIN_USER $APP_DIR/venv/bin/pip install psutil flask
+    
+    # Try importing again
+    sudo -u $ADMIN_USER $APP_DIR/venv/bin/python -c "import app; print('✅ App imports successfully after installing dependencies')" || {
+        log "❌ CRITICAL ERROR: App still fails to import!"
+        log "Python path and files:"
+        sudo -u $ADMIN_USER $APP_DIR/venv/bin/python -c "import sys; print('Python path:', sys.path)"
+        exit 1
+    }
 }
 
 # Create Gunicorn configuration
@@ -202,7 +237,7 @@ log "Starting $SERVICE_NAME service..."
 supervisorctl start $SERVICE_NAME
 
 # Check if service started successfully
-sleep 5
+sleep 10
 if supervisorctl status $SERVICE_NAME | grep -q "RUNNING"; then
     log "✅ $SERVICE_NAME service started successfully"
 else
@@ -210,7 +245,20 @@ else
     log "Service status:"
     supervisorctl status $SERVICE_NAME
     log "Application logs:"
-    tail -10 /var/log/$SERVICE_NAME.log || echo "No logs found"
+    tail -20 /var/log/$SERVICE_NAME.log || echo "No logs found"
+    
+    # Try to start with systemd as fallback
+    log "Trying to start with systemd as fallback..."
+    systemctl enable $SERVICE_NAME
+    systemctl start $SERVICE_NAME
+    sleep 5
+    
+    if systemctl is-active --quiet $SERVICE_NAME; then
+        log "✅ $SERVICE_NAME started successfully with systemd"
+    else
+        log "❌ $SERVICE_NAME failed to start with systemd too"
+        systemctl status $SERVICE_NAME --no-pager -l
+    fi
 fi
 
 # Start nginx
@@ -242,20 +290,61 @@ EOF
 chmod +x $APP_DIR/health_check.sh
 chown $ADMIN_USER:$ADMIN_USER $APP_DIR/health_check.sh
 
-# Final status check
+# Final status check and application testing
 log "Performing final status check..."
-sleep 10
+sleep 15
 
+# Check service status
+SERVICE_RUNNING=false
 if supervisorctl status $SERVICE_NAME | grep -q "RUNNING"; then
-    log "✅ Application is running successfully"
+    log "✅ Application is running successfully via supervisor"
+    SERVICE_RUNNING=true
+elif systemctl is-active --quiet $SERVICE_NAME; then
+    log "✅ Application is running successfully via systemd"
+    SERVICE_RUNNING=true
 else
-    log "❌ Application failed to start. Check logs: /var/log/$SERVICE_NAME.log"
+    log "❌ Application failed to start with both supervisor and systemd"
+    log "Supervisor status:"
+    supervisorctl status $SERVICE_NAME || echo "Supervisor not managing service"
+    log "Systemd status:"
+    systemctl status $SERVICE_NAME --no-pager -l || echo "Systemd not managing service"
+    log "Application logs:"
+    tail -30 /var/log/$SERVICE_NAME.log || echo "No logs found"
 fi
 
 if systemctl is-active --quiet nginx; then
     log "✅ Nginx is running successfully"
 else
     log "❌ Nginx failed to start. Check logs: journalctl -u nginx"
+    systemctl status nginx --no-pager -l
+fi
+
+# Test application endpoints if service is running
+if [ "$SERVICE_RUNNING" = true ]; then
+    log "Testing application endpoints..."
+    
+    # Wait a bit more for the application to fully start
+    sleep 10
+    
+    # Test Flask app directly
+    if curl -f -s http://localhost:5000/health >/dev/null 2>&1; then
+        log "✅ Flask app responding on port 5000"
+    else
+        log "❌ Flask app not responding on port 5000"
+        log "Checking if port 5000 is listening:"
+        netstat -tlnp | grep :5000 || echo "Port 5000 not listening"
+    fi
+    
+    # Test through nginx
+    if curl -f -s http://localhost/health >/dev/null 2>&1; then
+        log "✅ Application accessible through nginx"
+    else
+        log "❌ Application not accessible through nginx"
+        log "Nginx error logs:"
+        tail -10 /var/log/nginx/error.log || echo "No nginx error logs"
+    fi
+else
+    log "⚠️  Skipping endpoint tests as application service is not running"
 fi
 
 # Display useful information
