@@ -43,13 +43,13 @@ resource "azurerm_virtual_machine_extension" "custom_script" {
   type                 = "CustomScript"
   type_handler_version = "2.1"
 
-  protected_settings = jsonencode({
-    "script" = base64encode(templatefile("${path.root}/scripts/setup.sh", {
+  settings = jsonencode({
+    "commandToExecute" = templatefile("${path.root}/scripts/setup.sh", {
       github_repo_url = var.github_repo_url
       app_name        = var.app_name
       github_token    = var.github_token
       admin_username  = var.admin_username
-    }))
+    })
   })
 
   tags = var.tags
