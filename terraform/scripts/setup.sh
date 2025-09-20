@@ -1,142 +1,280 @@
-#!/bin/bash#!/bin/bash#!/bin/bash#!/bin/bash
+#!/bin/bash#!/bin/bash#!/bin/bash#!/bin/bash#!/bin/bash
 
 
 
 # VM Setup Script for Python Flask App
 
-# Simple and robust version to avoid templating issues
+set -e
 
-# VM Setup Script for Python Flask App with Nginx
+# VM Setup Script for Python Flask App
 
-set -e  # Exit on any error
+# Variables from Terraform
 
-# This script sets up the VM environment, clones the GitHub repo, and deploys the Python application
-
-# Variables from Terraform (templated)
-
-GITHUB_REPO_URL="${github_repo_url}"# VM Setup Script for Python Flask App with Nginx# VM Se# Update package lists and system
+GITHUB_REPO_URL="${github_repo_url}"# Simple and robust version to avoid templating issues
 
 APP_NAME="${app_name}"
 
-GITHUB_TOKEN="${github_token}"# Don't exit on every error - handle critical vs non-critical operations separately
+GITHUB_TOKEN="${github_token}"# VM Setup Script for Python Flask App with Nginx
 
 ADMIN_USER="${admin_username}"
 
-set +e# This script sets up the VM environment, clones the GitHub repo, and deploys the Python applicationlog "Updating system packages..."
+set -e  # Exit on any error
 
 # Derived variables
 
-APP_DIR="/home/$ADMIN_USER/$APP_NAME"
+APP_DIR="/home/$ADMIN_USER/$APP_NAME"# This script sets up the VM environment, clones the GitHub repo, and deploys the Python application
 
 SERVICE_NAME="$APP_NAME"
 
-LOG_FILE="/var/log/vm-setup.log"# Set strict mode for critical operations when neededapt-get update -y
+LOG_FILE="/var/log/vm-setup.log"# Variables from Terraform (templated)
 
 
 
-# Logging functionstrict_mode() {
+# Logging functionGITHUB_REPO_URL="${github_repo_url}"# VM Setup Script for Python Flask App with Nginx# VM Se# Update package lists and system
 
 log() {
 
-    echo "[$(date '+%Y-%m-%d %H:%M:%S')] $1" | tee -a $LOG_FILE    set -e# Don't exit on every error - handle critical vs non-critical operations separately
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] $1" | tee -a $LOG_FILEAPP_NAME="${app_name}"
 
 }
 
-}
+GITHUB_TOKEN="${github_token}"# Don't exit on every error - handle critical vs non-critical operations separately
 
-# Start logging
+log "=== VM Setup Started ==="
 
-log "=== VM Setup Started ==="set +e# Ensure universe repository is enabled (required for some packages)
+log "GitHub URL: $GITHUB_REPO_URL"ADMIN_USER="${admin_username}"
 
-log "GitHub URL: $GITHUB_REPO_URL"
+log "App Name: $APP_NAME"
 
-log "App Name: $APP_NAME"# Set permissive mode for non-critical operations
-
-log "Admin User: $ADMIN_USER"
-
-log "Token Present: $(if [ -n "$GITHUB_TOKEN" ]; then echo "YES"; else echo "NO"; fi)"permissive_mode() {log "Enabling universe repository..."
+log "Admin User: $ADMIN_USER"set +e# This script sets up the VM environment, clones the GitHub repo, and deploys the Python applicationlog "Updating system packages..."
 
 
 
-# Update system    set +e
+# Update system# Derived variables
 
 log "Updating system packages..."
 
-apt-get update -y}# Set strict mode for critical operations when neededadd-apt-repository universe -y
+apt-get update -yAPP_DIR="/home/$ADMIN_USER/$APP_NAME"
 
 add-apt-repository universe -y
 
-apt-get update -y
+apt-get update -ySERVICE_NAME="$APP_NAME"
 
 apt-get upgrade -y
 
-# Variables passed from Terraformstrict_mode() {apt-get update -y
+LOG_FILE="/var/log/vm-setup.log"# Set strict mode for critical operations when neededapt-get update -y
 
 # Install packages
 
-log "Installing required packages..."GITHUB_REPO_URL="${github_repo_url}"
+log "Installing required packages..."
 
-apt-get install -y python3 python3-pip python3-venv nginx git curl supervisor ufw htop unzip
+apt-get install -y python3 python3-pip python3-venv nginx git curl supervisor ufw
 
-APP_NAME="${app_name}"    set -e
+# Logging functionstrict_mode() {
 
-# Verify installations
+# Configure firewall
 
-log "Verifying Python installation..."GITHUB_TOKEN="${github_token}"
+log "Configuring firewall..."log() {
 
-python3 --version
+ufw allow OpenSSH
 
-pip3 --versionADMIN_USER="${admin_username}"}# Upgrade system packages
-
-
-
-# Configure firewallAPP_DIR="/home/$ADMIN_USER/$APP_NAME"
-
-log "Configuring firewall..."
-
-ufw allow OpenSSHSERVICE_NAME="$APP_NAME"apt-get upgrade -y
-
-ufw allow 'Nginx Full'
+ufw allow 'Nginx Full'    echo "[$(date '+%Y-%m-%d %H:%M:%S')] $1" | tee -a $LOG_FILE    set -e# Don't exit on every error - handle critical vs non-critical operations separately
 
 ufw allow 5000
 
-ufw --force enable
-
-# Log script start and variables (for debugging)# Set permissive mode for non-critical operations
-
-# Create app directory
-
-log "Setting up application directory..."LOG_FILE="/var/log/vm-setup.log"
-
-mkdir -p $APP_DIR
-
-chown $ADMIN_USER:$ADMIN_USER $APP_DIRecho "=== VM Setup Script Started at $(date) ===" | tee -a $LOG_FILEpermissive_mode() {# Install required packages
+ufw --force enable}
 
 
 
-# Clone repositoryecho "Variables received:" | tee -a $LOG_FILE
+# Create app directory}
 
-log "Cloning GitHub repository..."
+log "Setting up application directory..."
 
-cd /home/$ADMIN_USERecho "  GITHUB_REPO_URL: $GITHUB_REPO_URL" | tee -a $LOG_FILE    set +elog "Installing required packages..."
+mkdir -p $APP_DIR# Start logging
 
+chown $ADMIN_USER:$ADMIN_USER $APP_DIR
 
+log "=== VM Setup Started ==="set +e# Ensure universe repository is enabled (required for some packages)
 
-if [ -n "$GITHUB_TOKEN" ]; thenecho "  APP_NAME: $APP_NAME" | tee -a $LOG_FILE
+# Clone repository
 
-    log "Using GitHub token for private repository"
+log "Cloning GitHub repository..."log "GitHub URL: $GITHUB_REPO_URL"
 
-    REPO_URL_WITH_TOKEN=$(echo $GITHUB_REPO_URL | sed "s|https://|https://$GITHUB_TOKEN@|")echo "  ADMIN_USER: $ADMIN_USER" | tee -a $LOG_FILE}# Install packages one by one for better error handling
+cd /home/$ADMIN_USER
+
+log "App Name: $APP_NAME"# Set permissive mode for non-critical operations
+
+if [ -n "$GITHUB_TOKEN" ]; then
+
+    REPO_URL_WITH_TOKEN=$(echo $GITHUB_REPO_URL | sed "s|https://|https://$GITHUB_TOKEN@|")log "Admin User: $ADMIN_USER"
 
     sudo -u $ADMIN_USER git clone $REPO_URL_WITH_TOKEN $APP_NAME
 
-elseecho "  GitHub Token: $(if [ ! -z "$GITHUB_TOKEN" ]; then echo "PROVIDED"; else echo "NOT PROVIDED"; fi)" | tee -a $LOG_FILE
+elselog "Token Present: $(if [ -n "$GITHUB_TOKEN" ]; then echo "YES"; else echo "NO"; fi)"permissive_mode() {log "Enabling universe repository..."
+
+    sudo -u $ADMIN_USER git clone $GITHUB_REPO_URL $APP_NAME
+
+fi
+
+
+
+# Verify clone# Update system    set +e
+
+if [ ! -d "$APP_NAME" ]; then
+
+    log "ERROR: Repository clone failed!"log "Updating system packages..."
+
+    exit 1
+
+fiapt-get update -y}# Set strict mode for critical operations when neededadd-apt-repository universe -y
+
+
+
+log "Repository cloned successfully"add-apt-repository universe -y
+
+
+
+# Setup Python environmentapt-get update -y
+
+log "Setting up Python virtual environment..."
+
+cd $APP_DIRapt-get upgrade -y
+
+sudo -u $ADMIN_USER python3 -m venv venv
+
+sudo -u $ADMIN_USER $APP_DIR/venv/bin/pip install --upgrade pip# Variables passed from Terraformstrict_mode() {apt-get update -y
+
+
+
+# Install dependencies# Install packages
+
+log "Installing Python dependencies..."
+
+if [ -f "requirements.txt" ]; thenlog "Installing required packages..."GITHUB_REPO_URL="${github_repo_url}"
+
+    sudo -u $ADMIN_USER $APP_DIR/venv/bin/pip install -r requirements.txt
+
+elseapt-get install -y python3 python3-pip python3-venv nginx git curl supervisor ufw htop unzip
+
+    sudo -u $ADMIN_USER $APP_DIR/venv/bin/pip install flask gunicorn psutil
+
+fiAPP_NAME="${app_name}"    set -e
+
+
+
+# Create Supervisor config# Verify installations
+
+log "Creating Supervisor configuration..."
+
+cat > /etc/supervisor/conf.d/$SERVICE_NAME.conf << EOFlog "Verifying Python installation..."GITHUB_TOKEN="${github_token}"
+
+[program:$SERVICE_NAME]
+
+command=$APP_DIR/venv/bin/gunicorn --bind 127.0.0.1:5000 --workers 2 app:apppython3 --version
+
+directory=$APP_DIR
+
+user=$ADMIN_USERpip3 --versionADMIN_USER="${admin_username}"}# Upgrade system packages
+
+autostart=true
+
+autorestart=true
+
+redirect_stderr=true
+
+stdout_logfile=/var/log/$SERVICE_NAME.log# Configure firewallAPP_DIR="/home/$ADMIN_USER/$APP_NAME"
+
+EOF
+
+log "Configuring firewall..."
+
+# Create Nginx config
+
+log "Creating Nginx configuration..."ufw allow OpenSSHSERVICE_NAME="$APP_NAME"apt-get upgrade -y
+
+cat > /etc/nginx/sites-available/$SERVICE_NAME << EOF
+
+server {ufw allow 'Nginx Full'
+
+    listen 80;
+
+    server_name _;ufw allow 5000
+
+    location / {
+
+        proxy_pass http://127.0.0.1:5000;ufw --force enable
+
+        proxy_set_header Host \$host;
+
+        proxy_set_header X-Real-IP \$remote_addr;# Log script start and variables (for debugging)# Set permissive mode for non-critical operations
+
+    }
+
+}# Create app directory
+
+EOF
+
+log "Setting up application directory..."LOG_FILE="/var/log/vm-setup.log"
+
+# Enable Nginx site
+
+ln -sf /etc/nginx/sites-available/$SERVICE_NAME /etc/nginx/sites-enabled/mkdir -p $APP_DIR
+
+rm -f /etc/nginx/sites-enabled/default
+
+chown $ADMIN_USER:$ADMIN_USER $APP_DIRecho "=== VM Setup Script Started at $(date) ===" | tee -a $LOG_FILEpermissive_mode() {# Install required packages
+
+# Start services
+
+log "Starting services..."
+
+systemctl enable supervisor
+
+systemctl start supervisor# Clone repositoryecho "Variables received:" | tee -a $LOG_FILE
+
+systemctl enable nginx
+
+systemctl restart nginxlog "Cloning GitHub repository..."
+
+
+
+# Start applicationcd /home/$ADMIN_USERecho "  GITHUB_REPO_URL: $GITHUB_REPO_URL" | tee -a $LOG_FILE    set +elog "Installing required packages..."
+
+log "Starting Flask application..."
+
+supervisorctl reread
+
+supervisorctl update
+
+supervisorctl start $SERVICE_NAMEif [ -n "$GITHUB_TOKEN" ]; thenecho "  APP_NAME: $APP_NAME" | tee -a $LOG_FILE
+
+
+
+sleep 10    log "Using GitHub token for private repository"
+
+
+
+# Check status    REPO_URL_WITH_TOKEN=$(echo $GITHUB_REPO_URL | sed "s|https://|https://$GITHUB_TOKEN@|")echo "  ADMIN_USER: $ADMIN_USER" | tee -a $LOG_FILE}# Install packages one by one for better error handling
+
+if supervisorctl status $SERVICE_NAME | grep -q "RUNNING"; then
+
+    log "Application started successfully"    sudo -u $ADMIN_USER git clone $REPO_URL_WITH_TOKEN $APP_NAME
+
+else
+
+    log "Application failed to start"elseecho "  GitHub Token: $(if [ ! -z "$GITHUB_TOKEN" ]; then echo "PROVIDED"; else echo "NOT PROVIDED"; fi)" | tee -a $LOG_FILE
+
+fi
 
     log "Cloning public repository"
 
-    sudo -u $ADMIN_USER git clone $GITHUB_REPO_URL $APP_NAMEecho "================================" | tee -a $LOG_FILEapt-get install -y python3
+PUBLIC_IP=$(curl -s ifconfig.me 2>/dev/null || echo "Unknown")
 
-fi
+log "Setup completed! URL: http://$PUBLIC_IP/"    sudo -u $ADMIN_USER git clone $GITHUB_REPO_URL $APP_NAMEecho "================================" | tee -a $LOG_FILEapt-get install -y python3
+
+
+
+exit 0fi
 
 
 
