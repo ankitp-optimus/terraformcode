@@ -22,8 +22,9 @@ variables:
   python_version: '3.11'
   
   # Azure Service Connection Configuration
-  # Service connection 'Ankitdevops' is configured in Azure DevOps
-  azureServiceConnection: 'Ankitdevops'
+  # Service connection 'annkitsubserviceconnection' is configured in Azure DevOps
+  azureServiceConnection: 'annkitsubserviceconnection'
+  azureSubscriptionId: '1c756cca-f6af-4af6-b2a3-cd9e449ade18'
   
   # Application Configuration
   app_name: 'python-flask-app'
@@ -219,6 +220,7 @@ stages:
                   -var="github_repo_url=$(Build.Repository.Uri)" \
                   -var="app_name=$(app_name)" \
                   -var="github_token=" \
+                  -var="subscription_id=$(azureSubscriptionId)" \
                   -out=tfplan
                 
                 # Apply deployment
