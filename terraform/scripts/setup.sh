@@ -1,189 +1,374 @@
-#!/bin/bash#!/bin/bash#!/bin/bash
+#!/bin/bash#!/bin/bash#!/bin/bash#!/bin/bash
 
 
+
+# VM Setup Script for Python Flask App
+
+# Simple and robust version to avoid templating issues
 
 # VM Setup Script for Python Flask App with Nginx
 
+set -e  # Exit on any error
+
 # This script sets up the VM environment, clones the GitHub repo, and deploys the Python application
 
-# VM Setup Script for Python Flask App with Nginx# VM Se# Update package lists and system
+# Variables from Terraform (templated)
 
-# Don't exit on every error - handle critical vs non-critical operations separately
+GITHUB_REPO_URL="${github_repo_url}"# VM Setup Script for Python Flask App with Nginx# VM Se# Update package lists and system
 
-set +e# This script sets up the VM environment, clones the GitHub repo, and deploys the Python applicationlog "Updating system packages..."
+APP_NAME="${app_name}"
 
-
-
-# Set strict mode for critical operations when neededapt-get update -y
-
-strict_mode() {
-
-    set -e# Don't exit on every error - handle critical vs non-critical operations separately
-
-}
-
-set +e# Ensure universe repository is enabled (required for some packages)
-
-# Set permissive mode for non-critical operations
-
-permissive_mode() {log "Enabling universe repository..."
-
-    set +e
-
-}# Set strict mode for critical operations when neededadd-apt-repository universe -y
-
-
-
-# Variables passed from Terraformstrict_mode() {apt-get update -y
-
-GITHUB_REPO_URL="${github_repo_url}"
-
-APP_NAME="${app_name}"    set -e
-
-GITHUB_TOKEN="${github_token}"
-
-ADMIN_USER="${admin_username}"}# Upgrade system packages
-
-APP_DIR="/home/$ADMIN_USER/$APP_NAME"
-
-SERVICE_NAME="$APP_NAME"apt-get upgrade -y
-
-
-
-# Log script start and variables (for debugging)# Set permissive mode for non-critical operations
-
-LOG_FILE="/var/log/vm-setup.log"
-
-echo "=== VM Setup Script Started at $(date) ===" | tee -a $LOG_FILEpermissive_mode() {# Install required packages
-
-echo "Variables received:" | tee -a $LOG_FILE
-
-echo "  GITHUB_REPO_URL: $GITHUB_REPO_URL" | tee -a $LOG_FILE    set +elog "Installing required packages..."
-
-echo "  APP_NAME: $APP_NAME" | tee -a $LOG_FILE
-
-echo "  ADMIN_USER: $ADMIN_USER" | tee -a $LOG_FILE}# Install packages one by one for better error handling
-
-echo "  GitHub Token: $(if [ ! -z "$GITHUB_TOKEN" ]; then echo "PROVIDED"; else echo "NOT PROVIDED"; fi)" | tee -a $LOG_FILE
-
-echo "================================" | tee -a $LOG_FILEapt-get install -y python3
-
-
-
-# Logging function# Variables passed from Terraformapt-get install -y python3-pip
-
-log() {
-
-    echo "[$(date '+%Y-%m-%d %H:%M:%S')] $1" | tee -a $LOG_FILEGITHUB_REPO_URL="${github_repo_url}"apt-get install -y python3-venv
-
-}
-
-APP_NAME="${app_name}"apt-get install -y nginx
-
-log "Starting VM setup for $APP_NAME"
-
-GITHUB_TOKEN="${github_token}"apt-get install -y git
-
-# Update package lists and system
-
-log "Updating system packages..."ADMIN_USER="${admin_username}"apt-get install -y curl
-
-apt-get update -y
-
-APP_DIR="/home/$ADMIN_USER/$APP_NAME"apt-get install -y supervisor
-
-# Ensure universe repository is enabled (required for some packages)
-
-log "Enabling universe repository..."SERVICE_NAME="$APP_NAME"apt-get install -y ufw
-
-add-apt-repository universe -y
-
-apt-get update -yapt-get install -y htop
-
-
-
-# Upgrade system packages# Log script start and variables (for debugging)apt-get install -y unzip
-
-apt-get upgrade -y
-
-LOG_FILE="/var/log/vm-setup.log"
-
-# Install required packages with better error handling
-
-log "Installing required packages..."echo "=== VM Setup Script Started at $(date) ===" | tee -a $LOG_FILE# Verify Python installation
-
-strict_mode
-
-echo "Variables received:" | tee -a $LOG_FILElog "Verifying Python installation..."
-
-# Install critical packages one by one for better error handling
-
-log "Installing Python3..."echo "  GITHUB_REPO_URL: $GITHUB_REPO_URL" | tee -a $LOG_FILEpython3 --version
-
-apt-get install -y python3
-
-echo "  APP_NAME: $APP_NAME" | tee -a $LOG_FILEpip3 --versionhon Flask App with Nginx
-
-log "Installing pip..."
-
-apt-get install -y python3-pipecho "  ADMIN_USER: $ADMIN_USER" | tee -a $LOG_FILE# This script sets up the VM environment, clones the GitHub repo, and deploys the Python application
-
-
-
-log "Installing python3-venv..."echo "  GitHub Token: $(if [ ! -z "$GITHUB_TOKEN" ]; then echo "PROVIDED"; else echo "NOT PROVIDED"; fi)" | tee -a $LOG_FILE
-
-apt-get install -y python3-venv
-
-echo "================================" | tee -a $LOG_FILEset -e  # Exit on any error
-
-log "Installing nginx..."
-
-apt-get install -y nginx
-
-
-
-log "Installing git..."# Logging function# Variables passed from Terraform
-
-apt-get install -y git
-
-log() {GITHUB_REPO_URL="${github_repo_url}"
-
-log "Installing curl..."
-
-apt-get install -y curl    echo "[$(date '+%Y-%m-%d %H:%M:%S')] $1" | tee -a $LOG_FILEAPP_NAME="${app_name}"
-
-
-
-log "Installing supervisor..."}GITHUB_TOKEN="${github_token}"
-
-apt-get install -y supervisor
+GITHUB_TOKEN="${github_token}"# Don't exit on every error - handle critical vs non-critical operations separately
 
 ADMIN_USER="${admin_username}"
 
-log "Installing firewall utilities..."
+set +e# This script sets up the VM environment, clones the GitHub repo, and deploys the Python applicationlog "Updating system packages..."
 
-apt-get install -y ufwlog "Starting VM setup for $APP_NAME"APP_DIR="/home/$ADMIN_USER/$APP_NAME"
+# Derived variables
+
+APP_DIR="/home/$ADMIN_USER/$APP_NAME"
+
+SERVICE_NAME="$APP_NAME"
+
+LOG_FILE="/var/log/vm-setup.log"# Set strict mode for critical operations when neededapt-get update -y
 
 
 
-log "Installing monitoring tools..."SERVICE_NAME="$APP_NAME"
+# Logging functionstrict_mode() {
 
-apt-get install -y htop
+log() {
+
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] $1" | tee -a $LOG_FILE    set -e# Don't exit on every error - handle critical vs non-critical operations separately
+
+}
+
+}
+
+# Start logging
+
+log "=== VM Setup Started ==="set +e# Ensure universe repository is enabled (required for some packages)
+
+log "GitHub URL: $GITHUB_REPO_URL"
+
+log "App Name: $APP_NAME"# Set permissive mode for non-critical operations
+
+log "Admin User: $ADMIN_USER"
+
+log "Token Present: $(if [ -n "$GITHUB_TOKEN" ]; then echo "YES"; else echo "NO"; fi)"permissive_mode() {log "Enabling universe repository..."
+
+
+
+# Update system    set +e
+
+log "Updating system packages..."
+
+apt-get update -y}# Set strict mode for critical operations when neededadd-apt-repository universe -y
+
+add-apt-repository universe -y
+
+apt-get update -y
+
+apt-get upgrade -y
+
+# Variables passed from Terraformstrict_mode() {apt-get update -y
+
+# Install packages
+
+log "Installing required packages..."GITHUB_REPO_URL="${github_repo_url}"
+
+apt-get install -y python3 python3-pip python3-venv nginx git curl supervisor ufw htop unzip
+
+APP_NAME="${app_name}"    set -e
+
+# Verify installations
+
+log "Verifying Python installation..."GITHUB_TOKEN="${github_token}"
+
+python3 --version
+
+pip3 --versionADMIN_USER="${admin_username}"}# Upgrade system packages
+
+
+
+# Configure firewallAPP_DIR="/home/$ADMIN_USER/$APP_NAME"
+
+log "Configuring firewall..."
+
+ufw allow OpenSSHSERVICE_NAME="$APP_NAME"apt-get upgrade -y
+
+ufw allow 'Nginx Full'
+
+ufw allow 5000
+
+ufw --force enable
+
+# Log script start and variables (for debugging)# Set permissive mode for non-critical operations
+
+# Create app directory
+
+log "Setting up application directory..."LOG_FILE="/var/log/vm-setup.log"
+
+mkdir -p $APP_DIR
+
+chown $ADMIN_USER:$ADMIN_USER $APP_DIRecho "=== VM Setup Script Started at $(date) ===" | tee -a $LOG_FILEpermissive_mode() {# Install required packages
+
+
+
+# Clone repositoryecho "Variables received:" | tee -a $LOG_FILE
+
+log "Cloning GitHub repository..."
+
+cd /home/$ADMIN_USERecho "  GITHUB_REPO_URL: $GITHUB_REPO_URL" | tee -a $LOG_FILE    set +elog "Installing required packages..."
+
+
+
+if [ -n "$GITHUB_TOKEN" ]; thenecho "  APP_NAME: $APP_NAME" | tee -a $LOG_FILE
+
+    log "Using GitHub token for private repository"
+
+    REPO_URL_WITH_TOKEN=$(echo $GITHUB_REPO_URL | sed "s|https://|https://$GITHUB_TOKEN@|")echo "  ADMIN_USER: $ADMIN_USER" | tee -a $LOG_FILE}# Install packages one by one for better error handling
+
+    sudo -u $ADMIN_USER git clone $REPO_URL_WITH_TOKEN $APP_NAME
+
+elseecho "  GitHub Token: $(if [ ! -z "$GITHUB_TOKEN" ]; then echo "PROVIDED"; else echo "NOT PROVIDED"; fi)" | tee -a $LOG_FILE
+
+    log "Cloning public repository"
+
+    sudo -u $ADMIN_USER git clone $GITHUB_REPO_URL $APP_NAMEecho "================================" | tee -a $LOG_FILEapt-get install -y python3
+
+fi
+
+
+
+# Verify clone
+
+if [ ! -d "$APP_NAME" ]; then# Logging function# Variables passed from Terraformapt-get install -y python3-pip
+
+    log "ERROR: Repository clone failed!"
+
+    exit 1log() {
+
+fi
+
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] $1" | tee -a $LOG_FILEGITHUB_REPO_URL="${github_repo_url}"apt-get install -y python3-venv
+
+log "Repository cloned successfully"
+
+}
+
+# Setup Python environment
+
+log "Setting up Python virtual environment..."APP_NAME="${app_name}"apt-get install -y nginx
+
+cd $APP_DIR
+
+sudo -u $ADMIN_USER python3 -m venv venvlog "Starting VM setup for $APP_NAME"
+
+sudo -u $ADMIN_USER $APP_DIR/venv/bin/pip install --upgrade pip
+
+GITHUB_TOKEN="${github_token}"apt-get install -y git
+
+# Install Python dependencies
+
+log "Installing Python dependencies..."# Update package lists and system
+
+if [ -f "requirements.txt" ]; then
+
+    sudo -u $ADMIN_USER $APP_DIR/venv/bin/pip install -r requirements.txtlog "Updating system packages..."ADMIN_USER="${admin_username}"apt-get install -y curl
+
+else
+
+    sudo -u $ADMIN_USER $APP_DIR/venv/bin/pip install flask gunicorn psutilapt-get update -y
+
+fi
+
+APP_DIR="/home/$ADMIN_USER/$APP_NAME"apt-get install -y supervisor
+
+# Test app import
+
+log "Testing Flask application import..."# Ensure universe repository is enabled (required for some packages)
+
+cd $APP_DIR
+
+if sudo -u $ADMIN_USER $APP_DIR/venv/bin/python -c "import app; print('Success')" 2>/dev/null; thenlog "Enabling universe repository..."SERVICE_NAME="$APP_NAME"apt-get install -y ufw
+
+    log "App imports successfully"
+
+elseadd-apt-repository universe -y
+
+    log "App failed to import, installing additional dependencies..."
+
+    sudo -u $ADMIN_USER $APP_DIR/venv/bin/pip install psutil flaskapt-get update -yapt-get install -y htop
+
+fi
+
+
+
+# Create Supervisor config
+
+log "Creating Supervisor configuration..."# Upgrade system packages# Log script start and variables (for debugging)apt-get install -y unzip
+
+cat > /etc/supervisor/conf.d/$SERVICE_NAME.conf << 'EOF'
+
+[program:python-flask-app]apt-get upgrade -y
+
+command=/home/azureuser/python-flask-app/venv/bin/gunicorn --bind 127.0.0.1:5000 --workers 2 app:app
+
+directory=/home/azureuser/python-flask-appLOG_FILE="/var/log/vm-setup.log"
+
+user=azureuser
+
+autostart=true# Install required packages with better error handling
+
+autorestart=true
+
+redirect_stderr=truelog "Installing required packages..."echo "=== VM Setup Script Started at $(date) ===" | tee -a $LOG_FILE# Verify Python installation
+
+stdout_logfile=/var/log/python-flask-app.log
+
+EOFstrict_mode
+
+
+
+# Create Nginx configecho "Variables received:" | tee -a $LOG_FILElog "Verifying Python installation..."
+
+log "Creating Nginx configuration..."
+
+cat > /etc/nginx/sites-available/$SERVICE_NAME << 'EOF'# Install critical packages one by one for better error handling
+
+server {
+
+    listen 80;log "Installing Python3..."echo "  GITHUB_REPO_URL: $GITHUB_REPO_URL" | tee -a $LOG_FILEpython3 --version
+
+    server_name _;
+
+apt-get install -y python3
+
+    location / {
+
+        proxy_pass http://127.0.0.1:5000;echo "  APP_NAME: $APP_NAME" | tee -a $LOG_FILEpip3 --versionhon Flask App with Nginx
+
+        proxy_set_header Host $host;
+
+        proxy_set_header X-Real-IP $remote_addr;log "Installing pip..."
+
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+
+        proxy_set_header X-Forwarded-Proto $scheme;apt-get install -y python3-pipecho "  ADMIN_USER: $ADMIN_USER" | tee -a $LOG_FILE# This script sets up the VM environment, clones the GitHub repo, and deploys the Python application
+
+    }
+
+
+
+    location /health {
+
+        proxy_pass http://127.0.0.1:5000/health;log "Installing python3-venv..."echo "  GitHub Token: $(if [ ! -z "$GITHUB_TOKEN" ]; then echo "PROVIDED"; else echo "NOT PROVIDED"; fi)" | tee -a $LOG_FILE
+
+        proxy_set_header Host $host;
+
+        proxy_set_header X-Real-IP $remote_addr;apt-get install -y python3-venv
+
+    }
+
+}echo "================================" | tee -a $LOG_FILEset -e  # Exit on any error
+
+EOF
+
+log "Installing nginx..."
+
+# Enable Nginx site
+
+ln -sf /etc/nginx/sites-available/$SERVICE_NAME /etc/nginx/sites-enabled/apt-get install -y nginx
+
+rm -f /etc/nginx/sites-enabled/default
+
+
+
+# Test Nginx config
+
+nginx -tlog "Installing git..."# Logging function# Variables passed from Terraform
+
+
+
+# Start servicesapt-get install -y git
+
+log "Starting services..."
+
+systemctl enable supervisorlog() {GITHUB_REPO_URL="${github_repo_url}"
+
+systemctl start supervisor
+
+sleep 5log "Installing curl..."
+
+
+
+systemctl enable nginxapt-get install -y curl    echo "[$(date '+%Y-%m-%d %H:%M:%S')] $1" | tee -a $LOG_FILEAPP_NAME="${app_name}"
+
+systemctl restart nginx
+
+
+
+# Start application
+
+log "Starting Flask application..."log "Installing supervisor..."}GITHUB_TOKEN="${github_token}"
+
+supervisorctl reread
+
+supervisorctl updateapt-get install -y supervisor
+
+supervisorctl start python-flask-app
+
+ADMIN_USER="${admin_username}"
+
+# Wait and check status
+
+sleep 10log "Installing firewall utilities..."
+
+
+
+# Check service statusapt-get install -y ufwlog "Starting VM setup for $APP_NAME"APP_DIR="/home/$ADMIN_USER/$APP_NAME"
+
+if supervisorctl status python-flask-app | grep -q "RUNNING"; then
+
+    log "✅ Application started successfully"
+
+else
+
+    log "❌ Application failed to start"log "Installing monitoring tools..."SERVICE_NAME="$APP_NAME"
+
+    supervisorctl status python-flask-app
+
+    tail -20 /var/log/python-flask-app.logapt-get install -y htop
+
+fi
 
 # Update package lists and system
 
-log "Installing unzip..."
+if systemctl is-active --quiet nginx; then
 
-apt-get install -y unziplog "Updating system packages..."# Logging function
+    log "✅ Nginx is running"log "Installing unzip..."
+
+else
+
+    log "❌ Nginx failed to start"apt-get install -y unziplog "Updating system packages..."# Logging function
+
+    systemctl status nginx
+
+fi
 
 
 
-permissive_modeapt-get update -ylog() {
+# Get public IPpermissive_modeapt-get update -ylog() {
+
+PUBLIC_IP=$(curl -s --max-time 10 ifconfig.me 2>/dev/null || echo "Unable to determine IP")
+
+log "Setup completed! Application URL: http://$PUBLIC_IP/"
 
 
 
-# Verify Python installation    echo "[$(date '+%Y-%m-%d %H:%M:%S')] $1" | tee -a /var/log/app-setup.log
+log "=== VM Setup Completed ==="# Verify Python installation    echo "[$(date '+%Y-%m-%d %H:%M:%S')] $1" | tee -a /var/log/app-setup.log
 
+exit 0
 log "Verifying Python installation..."
 
 python3 --version# Ensure universe repository is enabled (required for some packages)}
