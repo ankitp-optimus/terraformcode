@@ -8,6 +8,8 @@ variables:
   environment: 'dev'
   location: 'East US'
   vm_size: 'Standard_B2s'
+  # Azure service connection name
+  serviceConnectionName: 'annkitsubserviceconnection'
 
 stages:
 # Validate Stage
