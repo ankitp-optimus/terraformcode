@@ -78,19 +78,7 @@ variable "source_image_version" {
   default     = "latest"
 }
 
-variable "github_repo_url" {
-  description = "GitHub repository URL to clone"
-  type        = string
-}
-
 variable "app_name" {
   description = "Name of the application"
   type        = string
-}
-
-variable "github_token" {
-  description = "GitHub token for private repositories"
-  type        = string
-  default     = ""
-  sensitive   = true
 }

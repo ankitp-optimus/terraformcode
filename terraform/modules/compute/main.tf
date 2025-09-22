@@ -45,9 +45,7 @@ resource "azurerm_virtual_machine_extension" "custom_script" {
 
   settings = jsonencode({
     "commandToExecute" = templatefile("${path.root}/scripts/setup.sh", {
-      github_repo_url = var.github_repo_url
       app_name        = var.app_name
-      github_token    = var.github_token
       admin_username  = var.admin_username
     })
   })

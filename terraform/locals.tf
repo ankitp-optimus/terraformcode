@@ -22,7 +22,7 @@ locals {
   vm_size = "Standard_B2s"  # Upgraded for better performance with Python apps
   
   # GitHub and deployment configuration
-  github_repo_url = var.github_repo_url
+
   app_name        = var.app_name
   app_port        = 5000  # Default Flask port
 

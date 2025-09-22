@@ -28,22 +28,10 @@ variable "admin_ssh_key" {
   sensitive   = true
 }
 
-variable "github_repo_url" {
-  description = "GitHub repository URL to clone and deploy"
-  type        = string
-}
-
 variable "app_name" {
   description = "Name of the application to deploy"
   type        = string
   default     = "python-flask-app"
-}
-
-variable "github_token" {
-  description = "GitHub personal access token for private repositories (optional)"
-  type        = string
-  default     = ""
-  sensitive   = true
 }
 
 # Azure Authentication Variables

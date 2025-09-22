@@ -35,8 +35,6 @@ module "compute" {
   admin_ssh_key        = var.admin_ssh_key
   network_interface_id = module.network.network_interface_id
   vm_size              = local.vm_size
-  github_repo_url      = var.github_repo_url
   app_name             = var.app_name
-  github_token         = var.github_token
   tags                 = local.common_tags
 }
