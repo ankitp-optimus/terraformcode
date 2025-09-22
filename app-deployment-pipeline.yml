@@ -228,7 +228,7 @@ stages:
 - stage: 'Validate_Deployment'
   displayName: 'Validate Application Deployment'
   condition: ne('${{ parameters.skip_tests }}', true)
-  dependsOn: 'Deploy_Application'
+  dependsOn: ['Deploy_Application', 'Get_VM_Info']
   variables:
     vm_public_ip: $[ stageDependencies.Get_VM_Info.GetVMInfo.outputs['GetVMDetails.vm_public_ip'] ]
   
@@ -246,16 +246,37 @@ stages:
         scriptType: 'bash'
         scriptLocation: 'inlineScript'
         inlineScript: |
-          VM_IP="$(vm_public_ip)"
-          echo "Testing application at IP: $VM_IP"
+          echo "=== DEBUGGING VM IP RETRIEVAL ==="
+          echo "Raw vm_public_ip variable: '$(vm_public_ip)'"
           
+          VM_IP="$(vm_public_ip)"
+          echo "VM_IP after assignment: '$VM_IP'"
+          
+          # If VM IP is empty, get it directly from Azure CLI
           if [ -z "$VM_IP" ] || [ "$VM_IP" = "null" ]; then
-            echo "ERROR: VM IP is not available for testing!"
-            exit 1
+            echo "VM IP is empty or null, retrieving directly from Azure..."
+            
+            # Get VM public IP directly
+            VM_IP=$(az vm list-ip-addresses \
+              --resource-group "${{ parameters.target_resource_group }}" \
+              --name "${{ parameters.target_vm_name }}" \
+              --query "[0].virtualMachine.network.publicIpAddresses[0].ipAddress" \
+              --output tsv 2>/dev/null)
+            
+            if [ -n "$VM_IP" ] && [ "$VM_IP" != "null" ]; then
+              echo "Found VM IP via Azure CLI: $VM_IP"
+            else
+              echo "Could not find VM IP via Azure CLI either"
+              echo "Available VMs in resource group ${{ parameters.target_resource_group }}:"
+              az vm list --resource-group "${{ parameters.target_resource_group }}" --query "[].{Name:name, ResourceGroup:resourceGroup}" --output table 2>/dev/null || echo "Failed to list VMs"
+              exit 1
+            fi
           fi
           
+          echo "Final VM IP to test: $VM_IP"
+          
           # Wait for application to be ready
-          echo "Waiting for application to start..."
+          echo "Testing application at IP: $VM_IP"
           sleep 30
           
           # Test application endpoints
