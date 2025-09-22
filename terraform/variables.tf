@@ -22,8 +22,8 @@ variable "admin_username" {
   default     = "azureuser"
 }
 
-variable "admin_ssh_key" {
-  description = "Admin SSH public key. This is a sensitive value and should be passed in via a .tfvars file or environment variable."
+variable "admin_password" {
+  description = "Admin password for VM. This is a sensitive value and should be passed in via a .tfvars file or environment variable."
   type        = string
   sensitive   = true
 }

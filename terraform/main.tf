@@ -32,7 +32,7 @@ module "compute" {
   resource_group_name  = azurerm_resource_group.rg.name
   location             = azurerm_resource_group.rg.location
   admin_username       = var.admin_username
-  admin_ssh_key        = var.admin_ssh_key
+  admin_password       = var.admin_password
   network_interface_id = module.network.network_interface_id
   vm_size              = local.vm_size
   tags                 = local.common_tags

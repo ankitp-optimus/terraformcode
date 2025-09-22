@@ -5,16 +5,12 @@ resource "azurerm_linux_virtual_machine" "vm" {
   location            = var.location
   size                = var.vm_size
   admin_username      = var.admin_username
+  admin_password      = var.admin_password
 
-  # Disable password authentication and use SSH keys only
-  disable_password_authentication = true
+  # Enable password authentication and disable SSH keys
+  disable_password_authentication = false
 
   network_interface_ids = [var.network_interface_id]
-
-  admin_ssh_key {
-    username   = var.admin_username
-    public_key = var.admin_ssh_key
-  }
 
   os_disk {
     caching              = var.os_disk_caching
