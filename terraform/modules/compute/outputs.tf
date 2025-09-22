@@ -8,3 +8,8 @@ output "vm_name" {
   description = "Name of the virtual machine"
   value       = azurerm_linux_virtual_machine.vm.name
 }
+
+output "vm_private_ip" {
+  description = "Private IP address of the virtual machine"
+  value       = azurerm_linux_virtual_machine.vm.private_ip_address
+}

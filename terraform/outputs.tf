@@ -38,11 +38,6 @@ output "vm_name" {
   value       = module.compute.vm_name
 }
 
-output "vm_private_ip" {
-  description = "Private IP address of the VM"
-  value       = module.compute.vm_private_ip
-}
-
 output "vm_public_ip" {
   description = "Public IP address of the VM"
   value       = module.network.public_ip_address
