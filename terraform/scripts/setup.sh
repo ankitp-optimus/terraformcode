@@ -11,47 +11,38 @@ ADMIN_USER="${admin_username}"
 APP_DIR="/home/$ADMIN_USER/$APP_NAME"
 SERVICE_NAME="$APP_NAME"
 
-# Logging function
-log() {
-    echo "[$(date '+%Y-%m-%d %H:%M:%S')] $1" | tee -a /var/log/app-setup.log
-}
-
-log "Starting VM setup for $APP_NAME"
-
 # Update and install packages
-apt-get update -y
-apt-get install -y python3 python3-pip python3-venv nginx git curl supervisor ufw htop unzip
+apt-get update -y >/dev/null 2>&1
+apt-get install -y python3 python3-pip python3-venv nginx git curl supervisor ufw htop unzip >/dev/null 2>&1
 
 # Configure firewall
-ufw allow OpenSSH
-ufw allow 'Nginx Full'
-ufw allow 5000
-ufw --force enable
+ufw allow OpenSSH >/dev/null 2>&1
+ufw allow 'Nginx Full' >/dev/null 2>&1
+ufw allow 5000 >/dev/null 2>&1
+ufw --force enable >/dev/null 2>&1
 
 # Verify application files exist
 if [ ! -d "$APP_DIR" ]; then
-    log "ERROR: Application directory $APP_DIR not found!"
+    echo "ERROR: Application directory $APP_DIR not found!"
     exit 1
 fi
-
-log "Application directory found: $APP_DIR"
 
 # Set proper ownership and setup Python environment
 cd $APP_DIR
 chown -R $ADMIN_USER:$ADMIN_USER $APP_DIR
-sudo -u $ADMIN_USER python3 -m venv venv
-sudo -u $ADMIN_USER $APP_DIR/venv/bin/pip install --upgrade pip
+sudo -u $ADMIN_USER python3 -m venv venv >/dev/null 2>&1
+sudo -u $ADMIN_USER $APP_DIR/venv/bin/pip install --upgrade pip >/dev/null 2>&1
 
 # Install dependencies
 if [ -f "$APP_DIR/requirements.txt" ]; then
-    sudo -u $ADMIN_USER $APP_DIR/venv/bin/pip install -r $APP_DIR/requirements.txt
+    sudo -u $ADMIN_USER $APP_DIR/venv/bin/pip install -r $APP_DIR/requirements.txt >/dev/null 2>&1
 else
-    sudo -u $ADMIN_USER $APP_DIR/venv/bin/pip install flask gunicorn psutil
+    sudo -u $ADMIN_USER $APP_DIR/venv/bin/pip install flask gunicorn psutil >/dev/null 2>&1
 fi
 
 # Test application import
 sudo -u $ADMIN_USER $APP_DIR/venv/bin/python -c "import app" || {
-    log "ERROR: App failed to import!"
+    echo "ERROR: App failed to import!"
     exit 1
 }
         sudo -u $ADMIN_USER $APP_DIR/venv/bin/python -c "import sys; print('Python path:', sys.path)"

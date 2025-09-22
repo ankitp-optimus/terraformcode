@@ -19,7 +19,6 @@ pr:
 variables:
   # Pipeline Configuration
   terraform_version: '1.5.0'
-  python_version: '3.11'
   
   # Azure Service Connection Configuration
   # Service connection 'annkitsubserviceconnection' is configured in Azure DevOps
@@ -57,27 +56,19 @@ stages:
         scriptLocation: 'inlineScript'
         inlineScript: |
           # Install Terraform
-          echo "Installing Terraform $(terraform_version)..."
           wget -O- https://apt.releases.hashicorp.com/gpg | gpg --dearmor | sudo tee /usr/share/keyrings/hashicorp-archive-keyring.gpg
           echo "deb [signed-by=/usr/share/keyrings/hashicorp-archive-keyring.gpg] https://apt.releases.hashicorp.com $(lsb_release -cs) main" | sudo tee /etc/apt/sources.list.d/hashicorp.list
           sudo apt update && sudo apt install terraform
           
           terraform version
           
-          echo "Generating SSH key pair..."
-          
-          # Create .ssh directory if it doesn't exist
-          mkdir -p ~/.ssh
-          
           # Generate SSH key pair
+          mkdir -p ~/.ssh
           ssh-keygen -t rsa -b 4096 -C "$(app_name)-$(Build.BuildId)" -f ~/.ssh/$(ssh_key_name) -N ""
           
           # Read the public key
           SSH_PUBLIC_KEY=$(cat ~/.ssh/$(ssh_key_name).pub)
           SSH_PRIVATE_KEY=$(cat ~/.ssh/$(ssh_key_name))
-          
-          echo "SSH key pair generated successfully"
-          echo "Public key: $SSH_PUBLIC_KEY"
           
           # Set pipeline variables for use in later stages
           echo "##vso[task.setvariable variable=ssh_public_key;isOutput=true;isSecret=false]$SSH_PUBLIC_KEY"
@@ -90,8 +81,6 @@ stages:
           # Set file permissions
           chmod 600 $(Agent.TempDirectory)/ssh_private_key
           chmod 644 $(Agent.TempDirectory)/ssh_public_key.pub
-          
-          echo "SSH keys saved to artifacts"
       name: 'PrepareEnvironment'
     
     - task: PublishPipelineArtifact@1
@@ -107,18 +96,6 @@ stages:
         terraform init -backend=false
         terraform validate
       displayName: 'Validate Terraform Configuration'
-    
-    - task: UsePythonVersion@0
-      displayName: 'Setup Python'
-      inputs:
-        versionSpec: $(python_version)
-    
-    - script: |
-        cd sample-python-app
-        python -m pip install --upgrade pip
-        pip install -r requirements.txt
-        python -m py_compile app.py
-      displayName: 'Validate Python Application'
 
 - stage: 'Deploy'
   displayName: 'Deploy Infrastructure and Application'
@@ -158,17 +135,17 @@ stages:
               scriptType: 'bash'
               scriptLocation: 'inlineScript'
               inlineScript: |
-                set -e  # Exit on any error
+                set -e
                 
-                echo "Installing Terraform..."
-                wget -O- https://apt.releases.hashicorp.com/gpg | gpg --dearmor | sudo tee /usr/share/keyrings/hashicorp-archive-keyring.gpg
-                echo "deb [signed-by=/usr/share/keyrings/hashicorp-archive-keyring.gpg] https://apt.releases.hashicorp.com $(lsb_release -cs) main" | sudo tee /etc/apt/sources.list.d/hashicorp.list
-                sudo apt update && sudo apt install terraform
+                # Install Terraform
+                wget -O- https://apt.releases.hashicorp.com/gpg | gpg --dearmor | sudo tee /usr/share/keyrings/hashicorp-archive-keyring.gpg >/dev/null
+                echo "deb [signed-by=/usr/share/keyrings/hashicorp-archive-keyring.gpg] https://apt.releases.hashicorp.com $(lsb_release -cs) main" | sudo tee /etc/apt/sources.list.d/hashicorp.list >/dev/null
+                sudo apt update >/dev/null && sudo apt install terraform >/dev/null
                 
-                # Set fixed resource names for development environment
-                ENVIRONMENT_NAME="dev"
-                RESOURCE_GROUP_NAME="$(resource_group_prefix)-${ENVIRONMENT_NAME}"
-                VM_NAME="$(vm_name_prefix)-${ENVIRONMENT_NAME}"
+                # Set resource names with unique suffix to avoid conflicts
+                UNIQUE_SUFFIX=$(date +%s | tail -c 4)
+                RESOURCE_GROUP_NAME="$(resource_group_prefix)-dev-$UNIQUE_SUFFIX"
+                VM_NAME="$(vm_name_prefix)-dev-$UNIQUE_SUFFIX"
                 
                 # Validate SSH key
                 if [ -z "$(ssh_public_key)" ]; then
@@ -177,7 +154,7 @@ stages:
                 fi
                 
                 cd terraform
-                terraform init
+                terraform init >/dev/null
                 terraform plan \
                   -var="resource_group_name=$RESOURCE_GROUP_NAME" \
                   -var="location=$(location)" \
@@ -186,12 +163,11 @@ stages:
                   -var="admin_ssh_key=$(ssh_public_key)" \
                   -var="app_name=$(app_name)" \
                   -var="subscription_id=$(azureSubscriptionId)" \
-                  -out=tfplan
+                  -out=tfplan >/dev/null
                 
                 # Apply deployment
-                if ! terraform apply -auto-approve tfplan; then
+                if ! terraform apply -auto-approve tfplan >/dev/null; then
                   echo "ERROR: Terraform apply failed!"
-                  terraform show || echo "No state to show"
                   exit 1
                 fi
                 
@@ -211,8 +187,6 @@ stages:
                 echo "##vso[task.setvariable variable=vm_public_ip;isOutput=true]$VM_PUBLIC_IP"
                 echo "##vso[task.setvariable variable=resource_group_name;isOutput=true]$RESOURCE_GROUP_NAME"
                 echo "##vso[task.setvariable variable=vm_name;isOutput=true]$VM_NAME"
-                
-                echo "Infrastructure deployed successfully. VM IP: $VM_PUBLIC_IP"
 
 - stage: 'Deploy_Application'
   displayName: 'Deploy Application to VM'
@@ -265,19 +239,18 @@ stages:
         fi
         
         # Add VM to known hosts and test SSH
-        ssh-keyscan -H $VM_IP >> ~/.ssh/known_hosts
-        ssh -o ConnectTimeout=30 $(admin_username)@$VM_IP "echo 'SSH connection successful'"
+        ssh-keyscan -H $VM_IP >> ~/.ssh/known_hosts 2>/dev/null
+        ssh -o ConnectTimeout=30 $(admin_username)@$VM_IP "echo 'SSH connected'" >/dev/null
         
         # Create application directory and copy files
         APP_NAME="$(app_name)"
         ssh $(admin_username)@$VM_IP "mkdir -p /home/$(admin_username)/$APP_NAME"
-        scp -r $(Agent.TempDirectory)/app-files/* $(admin_username)@$VM_IP:/home/$(admin_username)/$APP_NAME/
+        scp -r $(Agent.TempDirectory)/app-files/* $(admin_username)@$VM_IP:/home/$(admin_username)/$APP_NAME/ >/dev/null
         
         # Wait for VM setup to complete
-        echo "Waiting for nginx installation..."
         for i in {1..20}; do
           if ssh $(admin_username)@$VM_IP "sudo systemctl is-active nginx >/dev/null 2>&1"; then
-            echo "VM setup completed successfully"
+            echo "Deployment completed successfully"
             break
           fi
           sleep 30
