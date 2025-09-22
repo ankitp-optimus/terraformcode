@@ -9,6 +9,27 @@
                     <i class="fas fa-info-circle text-primary"></i> About This Application
                 </h1>
                 
+                <!-- Deployment Information Section -->
+                {% if deployment_info %}
+                <div class="card mb-4 border-success">
+                    <div class="card-header bg-success text-white">
+                        <h5 class="mb-0"><i class="fas fa-deployment"></i> Current Deployment</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <p><strong>Version:</strong> {{ deployment_info.version }}</p>
+                                <p><strong>Build Number:</strong> {{ deployment_info.build_number }}</p>
+                            </div>
+                            <div class="col-md-6">
+                                <p><strong>Commit Hash:</strong> {{ deployment_info.commit_hash }}</p>
+                                <p><strong>Deployment Time:</strong> {{ deployment_info.deployment_time }}</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                {% endif %}
+                
                 <div class="card mb-4">
                     <div class="card-body">
                         <h3 class="card-title">
@@ -18,8 +39,12 @@
                             This is a demonstration Python Flask web application that showcases a complete 
                             DevOps pipeline for deploying applications to Azure VMs. The project demonstrates 
                             Infrastructure as Code (IaC) principles using Terraform and automated deployment 
-                            using GitHub Actions.
+                            using Azure DevOps Pipelines.
                         </p>
+                        <div class="alert alert-info">
+                            <strong>New in v2.0.0:</strong> Enhanced deployment tracking, new API endpoints, 
+                            and improved monitoring capabilities!
+                        </div>
                     </div>
                 </div>
 

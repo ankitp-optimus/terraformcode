@@ -10,8 +10,26 @@
                 </h1>
                 <p class="lead mb-4">
                     This application demonstrates a complete CI/CD pipeline deploying Python Flask applications 
-                    to Azure VMs using Terraform and GitHub Actions.
+                    to Azure VMs using Terraform and Azure DevOps Pipelines.
                 </p>
+                
+                <!-- Deployment Information Badge -->
+                {% if deployment_info %}
+                <div class="alert alert-info mb-4" role="alert">
+                    <h6 class="alert-heading"><i class="fas fa-deployment"></i> Deployment Information</h6>
+                    <p class="mb-1"><strong>Version:</strong> {{ deployment_info.version }}</p>
+                    {% if deployment_info.build_number != 'unknown' %}
+                    <p class="mb-1"><strong>Build:</strong> {{ deployment_info.build_number }}</p>
+                    {% endif %}
+                    {% if deployment_info.commit_hash != 'unknown' %}
+                    <p class="mb-1"><strong>Commit:</strong> {{ deployment_info.commit_hash }}</p>
+                    {% endif %}
+                    {% if deployment_info.deployment_time != 'unknown' %}
+                    <p class="mb-0"><strong>Deployed:</strong> {{ deployment_info.deployment_time }}</p>
+                    {% endif %}
+                </div>
+                {% endif %}
+                
                 <div class="d-grid gap-2 d-md-flex justify-content-md-center">
                     <a href="{{ url_for('status') }}" class="btn btn-light btn-lg me-md-2">
                         <i class="fas fa-chart-line"></i> View Status
@@ -19,6 +37,55 @@
                     <a href="{{ url_for('about') }}" class="btn btn-outline-light btn-lg">
                         <i class="fas fa-info-circle"></i> Learn More
                     </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- New API Testing Section -->
+<section class="py-5 bg-light">
+    <div class="container">
+        <h2 class="text-center mb-5">API Endpoints for Testing</h2>
+        <div class="row">
+            <div class="col-md-6 col-lg-3 mb-4">
+                <div class="card h-100">
+                    <div class="card-body text-center">
+                        <i class="fas fa-heartbeat fa-2x text-success mb-3"></i>
+                        <h6 class="card-title">Health Check</h6>
+                        <p class="card-text">Monitor application health</p>
+                        <a href="/health" class="btn btn-success btn-sm" target="_blank">Test</a>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-6 col-lg-3 mb-4">
+                <div class="card h-100">
+                    <div class="card-body text-center">
+                        <i class="fas fa-rocket fa-2x text-primary mb-3"></i>
+                        <h6 class="card-title">Deployment Info</h6>
+                        <p class="card-text">View deployment details</p>
+                        <a href="/api/deployment" class="btn btn-primary btn-sm" target="_blank">Test</a>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-6 col-lg-3 mb-4">
+                <div class="card h-100">
+                    <div class="card-body text-center">
+                        <i class="fas fa-vial fa-2x text-warning mb-3"></i>
+                        <h6 class="card-title">Test Endpoint</h6>
+                        <p class="card-text">Validate deployment</p>
+                        <a href="/api/test" class="btn btn-warning btn-sm" target="_blank">Test</a>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-6 col-lg-3 mb-4">
+                <div class="card h-100">
+                    <div class="card-body text-center">
+                        <i class="fas fa-echo fa-2x text-info mb-3"></i>
+                        <h6 class="card-title">Echo API</h6>
+                        <p class="card-text">Test HTTP methods</p>
+                        <a href="/api/echo?message=hello" class="btn btn-info btn-sm" target="_blank">Test</a>
+                    </div>
                 </div>
             </div>
         </div>
