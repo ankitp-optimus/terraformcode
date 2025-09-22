@@ -247,29 +247,59 @@ stages:
       vmImage: 'ubuntu-latest'
     
     steps:
-    - script: |
-        VM_IP="$(vm_public_ip)"
-        
-        # Wait for application to be ready
-        echo "Testing application at IP: $VM_IP"
-        sleep 30
-        
-        # Test multiple endpoints to ensure application is working
-        echo "Testing health endpoint..."
-        if curl -f -s --connect-timeout 10 "http://$VM_IP/health" >/dev/null 2>&1; then
-          echo "Health endpoint responding"
-        else
-          echo "Health endpoint failed, trying home page..."
-          if curl -f -s --connect-timeout 10 "http://$VM_IP/" >/dev/null 2>&1; then
-            echo "Home page responding"
-          else
-            echo "Application validation failed - no endpoints responding"
-            echo "Debugging information:"
-            echo "VM IP: $VM_IP"
-            curl -v "http://$VM_IP/" 2>&1 || echo "No response from VM"
-            exit 1
-          fi
-        fi
-        
-        echo "Application validation successful"
+    - task: AzureCLI@2
       displayName: 'Test Application'
+      inputs:
+        azureSubscription: '$(serviceConnectionName)'
+        scriptType: 'bash'
+        scriptLocation: 'inlineScript'
+        inlineScript: |
+          # Debug: Show all available environment variables
+          echo "=== DEBUGGING VM IP RETRIEVAL ==="
+          echo "Raw vm_public_ip variable: '$(vm_public_ip)'"
+          
+          VM_IP="$(vm_public_ip)"
+          echo "VM_IP after assignment: '$VM_IP'"
+          
+          # If VM IP is empty, try to get it from Azure CLI as fallback
+          if [ -z "$VM_IP" ] || [ "$VM_IP" = "null" ]; then
+            echo "VM IP is empty or null, trying Azure CLI fallback..."
+            
+            # Try to find the VM and get its IP
+            echo "Searching for VMs with pattern: vm-flask-app-dev-ank"
+            VM_IP=$(az vm list-ip-addresses --query "[?contains(virtualMachine.name, 'vm-flask-app-dev-ank')].virtualMachine.network.publicIpAddresses[0].ipAddress" --output tsv 2>/dev/null | head -1)
+            
+            if [ -n "$VM_IP" ] && [ "$VM_IP" != "null" ]; then
+              echo "Found VM IP via Azure CLI: $VM_IP"
+            else
+              echo "Could not find VM IP via Azure CLI either"
+              echo "Available VMs:"
+              az vm list --query "[].{Name:name, ResourceGroup:resourceGroup}" --output table 2>/dev/null || echo "Failed to list VMs"
+              exit 1
+            fi
+          fi
+          
+          echo "Final VM IP to test: $VM_IP"
+          
+          # Wait for application to be ready
+          echo "Testing application at IP: $VM_IP"
+          sleep 30
+          
+          # Test multiple endpoints to ensure application is working
+          echo "Testing health endpoint..."
+          if curl -f -s --connect-timeout 10 "http://$VM_IP/health" >/dev/null 2>&1; then
+            echo "Health endpoint responding"
+          else
+            echo "Health endpoint failed, trying home page..."
+            if curl -f -s --connect-timeout 10 "http://$VM_IP/" >/dev/null 2>&1; then
+              echo "Home page responding"
+            else
+              echo "Application validation failed - no endpoints responding"
+              echo "Debugging information:"
+              echo "VM IP: $VM_IP"
+              curl -v "http://$VM_IP/" 2>&1 || echo "No response from VM"
+              exit 1
+            fi
+          fi
+          
+          echo "Application validation successful"
