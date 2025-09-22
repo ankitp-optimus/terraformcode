@@ -34,6 +34,18 @@ variable "app_name" {
   default     = "python-flask-app"
 }
 
+variable "vm_size" {
+  description = "Size of the virtual machine"
+  type        = string
+  default     = "Standard_B2s"
+}
+
+variable "environment" {
+  description = "Environment name (dev, staging, prod)"
+  type        = string
+  default     = "dev"
+}
+
 # Azure Authentication Variables
 # These are automatically provided by Azure DevOps service connection
 variable "client_id" {
