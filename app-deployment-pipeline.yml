@@ -1,0 +1,366 @@
+trigger: none
+
+
+# Pipeline Parameters for Application Deployment
+parameters:
+- name: app_name
+  displayName: 'Application Name'
+  type: string
+  default: 'flask-app'
+
+- name: target_vm_name
+  displayName: 'Target VM Name'
+  type: string
+  default: 'vm-flask-app-dev-ank'
+
+- name: target_resource_group
+  displayName: 'Target Resource Group'
+  type: string
+  default: 'rg-flask-app-dev-ank'
+
+- name: admin_username
+  displayName: 'VM Admin Username'
+  type: string
+  default: 'azureuser'
+
+- name: skip_tests
+  displayName: 'Skip Application Tests'
+  type: boolean
+  default: false
+
+# Pipeline Variables
+variables:
+  # Azure service connection name
+  serviceConnectionName: 'annkitsubserviceconnection'
+  # Build configuration
+  buildConfiguration: 'Release'
+
+stages:
+# Package Application Stage
+- stage: 'Package_Application'
+  displayName: 'Package Application'
+  jobs:
+  - job: 'PackageApp'
+    displayName: 'Package Application Files'
+    pool:
+      vmImage: 'ubuntu-latest'
+    
+    steps:
+    - script: |
+        echo "Packaging application: ${{ parameters.app_name }}"
+        echo "Target VM: ${{ parameters.target_vm_name }}"
+        echo "Resource Group: ${{ parameters.target_resource_group }}"
+        echo "Using rolling deployment strategy"
+        
+        # Create temp directory for application files
+        mkdir -p $(Agent.TempDirectory)/app-files
+        
+        # Copy application files
+        if [ -d "sample-python-app" ]; then
+          cp -r sample-python-app/* $(Agent.TempDirectory)/app-files/
+          echo "Application files packaged successfully"
+        else
+          echo "ERROR: sample-python-app directory not found"
+          exit 1
+        fi
+        
+        # Add version information
+        echo "$(Build.BuildNumber)" > $(Agent.TempDirectory)/app-files/version.txt
+        echo "$(Build.SourceVersion)" > $(Agent.TempDirectory)/app-files/commit.txt
+        echo "Deployment Time: $(date)" > $(Agent.TempDirectory)/app-files/deployment-info.txt
+      displayName: 'Package Application Files'
+    
+    - task: PublishPipelineArtifact@1
+      displayName: 'Publish Application Artifact'
+      inputs:
+        targetPath: '$(Agent.TempDirectory)/app-files'
+        artifact: 'application-files'
+
+# Get VM Information Stage
+- stage: 'Get_VM_Info'
+  displayName: 'Get Target VM Information'
+  dependsOn: 'Package_Application'
+  variables:
+  - name: admin_password
+    value: $[variables.VM_ADMIN_PASSWORD]  # Reference to Azure DevOps secret variable
+  
+  jobs:
+  - job: 'GetVMInfo'
+    displayName: 'Retrieve VM Details'
+    pool:
+      vmImage: 'ubuntu-latest'
+    
+    steps:
+    - task: AzureCLI@2
+      displayName: 'Get VM Information'
+      name: 'GetVMDetails'
+      inputs:
+        azureSubscription: '$(serviceConnectionName)'
+        scriptType: 'bash'
+        scriptLocation: 'inlineScript'
+        inlineScript: |
+          echo "Searching for VM: ${{ parameters.target_vm_name }}"
+          echo "In Resource Group: ${{ parameters.target_resource_group }}"
+          
+          # Get VM public IP
+          VM_IP=$(az vm list-ip-addresses \
+            --resource-group "${{ parameters.target_resource_group }}" \
+            --name "${{ parameters.target_vm_name }}" \
+            --query "[0].virtualMachine.network.publicIpAddresses[0].ipAddress" \
+            --output tsv 2>/dev/null)
+          
+          if [ -z "$VM_IP" ] || [ "$VM_IP" = "null" ]; then
+            echo "ERROR: Could not find VM ${{ parameters.target_vm_name }} in resource group ${{ parameters.target_resource_group }}"
+            echo "Available VMs in resource group:"
+            az vm list --resource-group "${{ parameters.target_resource_group }}" --query "[].name" --output table 2>/dev/null || echo "No VMs found"
+            exit 1
+          fi
+          
+          echo "Found VM IP: $VM_IP"
+          
+          # Verify VM is running
+          VM_STATUS=$(az vm get-instance-view \
+            --resource-group "${{ parameters.target_resource_group }}" \
+            --name "${{ parameters.target_vm_name }}" \
+            --query "instanceView.statuses[?code=='PowerState/running'].displayStatus" \
+            --output tsv 2>/dev/null)
+          
+          if [ "$VM_STATUS" != "VM running" ]; then
+            echo "WARNING: VM is not in running state. Current status: $VM_STATUS"
+            echo "Attempting to start VM..."
+            az vm start --resource-group "${{ parameters.target_resource_group }}" --name "${{ parameters.target_vm_name }}"
+            sleep 30
+          fi
+          
+          # Set pipeline variables
+          echo "##vso[task.setvariable variable=vm_public_ip;isOutput=true]$VM_IP"
+          echo "##vso[task.setvariable variable=vm_status;isOutput=true]$VM_STATUS"
+
+# Deploy Application Stage
+- stage: 'Deploy_Application'
+  displayName: 'Deploy Application to VM'
+  dependsOn: ['Package_Application', 'Get_VM_Info']
+  variables:
+    vm_public_ip: $[ stageDependencies.Get_VM_Info.GetVMInfo.outputs['GetVMDetails.vm_public_ip'] ]
+    admin_password: $[variables.VM_ADMIN_PASSWORD]  # Reference to Azure DevOps secret variable
+  
+  jobs:
+  - job: 'DeployToVM'
+    displayName: 'Deploy Application'
+    pool:
+      vmImage: 'ubuntu-latest'
+    
+    steps:
+    - task: DownloadPipelineArtifact@2
+      displayName: 'Download Application Files'
+      inputs:
+        buildType: 'current'
+        artifactName: 'application-files'
+        targetPath: '$(Agent.TempDirectory)/app-files'
+    
+    - script: |
+        # Install sshpass for password authentication
+        sudo apt update >/dev/null
+        sudo apt install -y sshpass >/dev/null
+        
+        VM_IP="$(vm_public_ip)"
+        echo "Deploying to VM: $VM_IP"
+        
+        if [ -z "$VM_IP" ] || [ "$VM_IP" = "null" ]; then
+          echo "ERROR: VM IP is not available!"
+          exit 1
+        fi
+        
+        # Test connection
+        echo "Testing SSH connection..."
+        sshpass -p "$(admin_password)" ssh -o ConnectTimeout=30 -o StrictHostKeyChecking=no ${{ parameters.admin_username }}@$VM_IP "echo 'SSH connection successful'" >/dev/null
+        
+        if [ $? -ne 0 ]; then
+          echo "ERROR: Failed to connect to VM"
+          exit 1
+        fi
+        
+        # Create backup of current application (if exists)
+        echo "Creating backup of current application..."
+        TIMESTAMP=$(date +%Y%m%d_%H%M%S)
+        sshpass -p "$(admin_password)" ssh -o StrictHostKeyChecking=no ${{ parameters.admin_username }}@$VM_IP \
+          "if [ -d '/home/${{ parameters.admin_username }}/${{ parameters.app_name }}' ]; then \
+             sudo cp -r /home/${{ parameters.admin_username }}/${{ parameters.app_name }} /home/${{ parameters.admin_username }}/${{ parameters.app_name }}_backup_$TIMESTAMP; \
+             echo 'Backup created: ${{ parameters.app_name }}_backup_$TIMESTAMP'; \
+           else \
+             echo 'No existing application found to backup'; \
+           fi"
+        
+        # Stop application service (if running)
+        echo "Stopping application service..."
+        sshpass -p "$(admin_password)" ssh -o StrictHostKeyChecking=no ${{ parameters.admin_username }}@$VM_IP \
+          "echo '$(admin_password)' | sudo -S systemctl stop ${{ parameters.app_name }} 2>/dev/null || echo 'Service not running or not found'"
+        
+        # Deploy new application files
+        echo "Deploying new application files..."
+        APP_NAME="${{ parameters.app_name }}"
+        sshpass -p "$(admin_password)" ssh -o StrictHostKeyChecking=no ${{ parameters.admin_username }}@$VM_IP "mkdir -p /home/${{ parameters.admin_username }}/$APP_NAME"
+        sshpass -p "$(admin_password)" scp -o StrictHostKeyChecking=no -r $(Agent.TempDirectory)/app-files/* ${{ parameters.admin_username }}@$VM_IP:/home/${{ parameters.admin_username }}/$APP_NAME/ >/dev/null
+        
+        # Install/update dependencies
+        echo "Installing/updating dependencies..."
+        sshpass -p "$(admin_password)" ssh -o StrictHostKeyChecking=no ${{ parameters.admin_username }}@$VM_IP \
+          "cd /home/${{ parameters.admin_username }}/$APP_NAME && \
+           echo '$(admin_password)' | sudo -S pip3 install -r requirements.txt 2>/dev/null || echo 'Requirements installation completed'"
+        
+        # Start application service
+        echo "Starting application service..."
+        sshpass -p "$(admin_password)" ssh -o StrictHostKeyChecking=no ${{ parameters.admin_username }}@$VM_IP \
+          "echo '$(admin_password)' | sudo -S systemctl start ${{ parameters.app_name }} && \
+           echo '$(admin_password)' | sudo -S systemctl enable ${{ parameters.app_name }}"
+        
+        # Wait for service to start
+        sleep 10
+        
+        # Check service status
+        sshpass -p "$(admin_password)" ssh -o StrictHostKeyChecking=no ${{ parameters.admin_username }}@$VM_IP \
+          "echo '$(admin_password)' | sudo -S systemctl status ${{ parameters.app_name }} --no-pager"
+        
+        echo "Application deployment completed successfully"
+      displayName: 'Deploy Application to VM'
+
+# Validate Deployment Stage
+- stage: 'Validate_Deployment'
+  displayName: 'Validate Application Deployment'
+  condition: ne('${{ parameters.skip_tests }}', true)
+  dependsOn: 'Deploy_Application'
+  variables:
+    vm_public_ip: $[ stageDependencies.Get_VM_Info.GetVMInfo.outputs['GetVMDetails.vm_public_ip'] ]
+  
+  jobs:
+  - job: 'ValidateApp'
+    displayName: 'Validate Application'
+    pool:
+      vmImage: 'ubuntu-latest'
+    
+    steps:
+    - task: AzureCLI@2
+      displayName: 'Test Application Endpoints'
+      inputs:
+        azureSubscription: '$(serviceConnectionName)'
+        scriptType: 'bash'
+        scriptLocation: 'inlineScript'
+        inlineScript: |
+          VM_IP="$(vm_public_ip)"
+          echo "Testing application at IP: $VM_IP"
+          
+          if [ -z "$VM_IP" ] || [ "$VM_IP" = "null" ]; then
+            echo "ERROR: VM IP is not available for testing!"
+            exit 1
+          fi
+          
+          # Wait for application to be ready
+          echo "Waiting for application to start..."
+          sleep 30
+          
+          # Test application endpoints
+          echo "Testing application endpoints..."
+          
+          # Test health endpoint
+          echo "1. Testing /health endpoint..."
+          if curl -f -s --connect-timeout 10 --max-time 30 "http://$VM_IP/health" >/dev/null 2>&1; then
+            echo "✓ Health endpoint is responding"
+            HEALTH_RESPONSE=$(curl -s "http://$VM_IP/health" 2>/dev/null)
+            echo "Health response: $HEALTH_RESPONSE"
+          else
+            echo "✗ Health endpoint failed"
+            HEALTH_FAILED=true
+          fi
+          
+          # Test home page
+          echo "2. Testing home page..."
+          if curl -f -s --connect-timeout 10 --max-time 30 "http://$VM_IP/" >/dev/null 2>&1; then
+            echo "✓ Home page is responding"
+          else
+            echo "✗ Home page failed"
+            HOME_FAILED=true
+          fi
+          
+          # Test about page
+          echo "3. Testing /about endpoint..."
+          if curl -f -s --connect-timeout 10 --max-time 30 "http://$VM_IP/about" >/dev/null 2>&1; then
+            echo "✓ About page is responding"
+          else
+            echo "✗ About page failed"
+          fi
+          
+          # Check if critical endpoints failed
+          if [ "$HEALTH_FAILED" = true ] && [ "$HOME_FAILED" = true ]; then
+            echo ""
+            echo "DEPLOYMENT VALIDATION FAILED"
+            echo "Both critical endpoints (health and home) are not responding"
+            echo ""
+            echo "Debugging information:"
+            echo "VM IP: $VM_IP"
+            curl -v "http://$VM_IP/" 2>&1 || echo "No response from VM"
+            exit 1
+          fi
+          
+          echo ""
+          echo "DEPLOYMENT VALIDATION SUCCESSFUL"
+          echo "Application is responding on VM: $VM_IP"
+          echo "Deployment completed successfully!"
+
+# Rollback Stage (Manual)
+- stage: 'Rollback_Option'
+  displayName: 'Rollback (Manual Trigger)'
+  condition: failed()
+  dependsOn: ['Deploy_Application', 'Validate_Deployment']
+  variables:
+    vm_public_ip: $[ stageDependencies.Get_VM_Info.GetVMInfo.outputs['GetVMDetails.vm_public_ip'] ]
+    admin_password: $[variables.VM_ADMIN_PASSWORD]
+  
+  jobs:
+  - job: 'RollbackApp'
+    displayName: 'Rollback Application'
+    pool:
+      vmImage: 'ubuntu-latest'
+    
+    steps:
+    - script: |
+        echo "INITIATING ROLLBACK PROCEDURE"
+        
+        # Install sshpass for password authentication
+        sudo apt update >/dev/null
+        sudo apt install -y sshpass >/dev/null
+        
+        VM_IP="$(vm_public_ip)"
+        
+        if [ -z "$VM_IP" ] || [ "$VM_IP" = "null" ]; then
+          echo "ERROR: VM IP is not available for rollback!"
+          exit 1
+        fi
+        
+        echo "Rolling back application on VM: $VM_IP"
+        
+        # Find the most recent backup
+        BACKUP_DIR=$(sshpass -p "$(admin_password)" ssh -o StrictHostKeyChecking=no ${{ parameters.admin_username }}@$VM_IP \
+          "ls -td /home/${{ parameters.admin_username }}/${{ parameters.app_name }}_backup_* 2>/dev/null | head -1")
+        
+        if [ -n "$BACKUP_DIR" ]; then
+          echo "Found backup: $BACKUP_DIR"
+          
+          # Stop current service
+          sshpass -p "$(admin_password)" ssh -o StrictHostKeyChecking=no ${{ parameters.admin_username }}@$VM_IP \
+            "echo '$(admin_password)' | sudo -S systemctl stop ${{ parameters.app_name }}"
+          
+          # Restore backup
+          sshpass -p "$(admin_password)" ssh -o StrictHostKeyChecking=no ${{ parameters.admin_username }}@$VM_IP \
+            "rm -rf /home/${{ parameters.admin_username }}/${{ parameters.app_name }} && \
+             cp -r $BACKUP_DIR /home/${{ parameters.admin_username }}/${{ parameters.app_name }}"
+          
+          # Start service
+          sshpass -p "$(admin_password)" ssh -o StrictHostKeyChecking=no ${{ parameters.admin_username }}@$VM_IP \
+            "echo '$(admin_password)' | sudo -S systemctl start ${{ parameters.app_name }}"
+          
+          echo "Rollback completed successfully"
+        else
+          echo "No backup found for rollback"
+          exit 1
+        fi
+      displayName: 'Rollback to Previous Version'

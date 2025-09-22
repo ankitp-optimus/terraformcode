@@ -1,5 +1,4 @@
-trigger:
-- main
+trigger: none
 
 # Pipeline Parameters - Can be customized when running the pipeline
 parameters:
