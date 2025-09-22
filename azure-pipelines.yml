@@ -1,19 +1,49 @@
 trigger:
 - main
 
+# Pipeline Parameters - Can be customized when running the pipeline
+parameters:
+- name: app_name
+  displayName: 'Application Name'
+  type: string
+  default: 'flask-app'
+
+- name: admin_username
+  displayName: 'VM Admin Username'
+  type: string
+  default: 'azureuser'
+
+- name: environment
+  displayName: 'Environment'
+  type: string
+  default: 'dev'
+  values:
+  - dev
+  - staging
+  - prod
+
+- name: location
+  displayName: 'Azure Location'
+  type: string
+  default: 'East US'
+
+- name: vm_size
+  displayName: 'VM Size'
+  type: string
+  default: 'Standard_B2s'
+
+- name: resource_group_name
+  displayName: 'Resource Group Name'
+  type: string
+  default: 'rg-flask-app-dev-ank'
+
+- name: vm_name
+  displayName: 'VM Name'
+  type: string
+  default: 'vm-flask-app-dev-ank'
+
+# Pipeline Variables
 variables:
-  # Application variables
-  app_name: 'flask-app'
-  admin_username: 'azureuser'
-  # admin_password will be retrieved from Azure DevOps secret variables
-  environment: 'dev'
-  location: 'East US'
-  vm_size: 'Standard_B2s'
-  
-  # Resource naming variables (will override defaults)
-  resource_group_name: 'rg-flask-app-dev-ank'
-  vm_name: 'vm-flask-app-dev-ank'
-  
   # Azure service connection name
   serviceConnectionName: 'annkitsubserviceconnection'
   
@@ -100,20 +130,20 @@ stages:
             # Setup Terraform working directory
             cd terraform
             
-            # Use pipeline variables directly (no dynamic generation)
-            RESOURCE_GROUP_NAME="$(resource_group_name)"
-            VM_NAME="$(vm_name)"
+            # Use pipeline parameters directly (no dynamic generation)
+            RESOURCE_GROUP_NAME="${{ parameters.resource_group_name }}"
+            VM_NAME="${{ parameters.vm_name }}"
             
             # Initialize and apply Terraform with all variables
             terraform init >/dev/null
             
             terraform apply -auto-approve \
-              -var="app_name=$(app_name)" \
-              -var="admin_username=$(admin_username)" \
+              -var="app_name=${{ parameters.app_name }}" \
+              -var="admin_username=${{ parameters.admin_username }}" \
               -var="admin_password=$(admin_password)" \
-              -var="environment=$(environment)" \
-              -var="location=$(location)" \
-              -var="vm_size=$(vm_size)" \
+              -var="environment=${{ parameters.environment }}" \
+              -var="location=${{ parameters.location }}" \
+              -var="vm_size=${{ parameters.vm_size }}" \
               -var="resource_group_name=$RESOURCE_GROUP_NAME" \
               -var="vm_name=$VM_NAME"
             
@@ -219,16 +249,16 @@ stages:
         fi
         
         # Test connection with password authentication
-        sshpass -p "$(admin_password)" ssh -o ConnectTimeout=30 -o StrictHostKeyChecking=no $(admin_username)@$VM_IP "echo 'SSH connected'" >/dev/null
+        sshpass -p "$(admin_password)" ssh -o ConnectTimeout=30 -o StrictHostKeyChecking=no ${{ parameters.admin_username }}@$VM_IP "echo 'SSH connected'" >/dev/null
         
         # Create application directory and copy files
-        APP_NAME="$(app_name)"
-        sshpass -p "$(admin_password)" ssh -o StrictHostKeyChecking=no $(admin_username)@$VM_IP "mkdir -p /home/$(admin_username)/$APP_NAME"
-        sshpass -p "$(admin_password)" scp -o StrictHostKeyChecking=no -r $(Agent.TempDirectory)/app-files/* $(admin_username)@$VM_IP:/home/$(admin_username)/$APP_NAME/ >/dev/null
+        APP_NAME="${{ parameters.app_name }}"
+        sshpass -p "$(admin_password)" ssh -o StrictHostKeyChecking=no ${{ parameters.admin_username }}@$VM_IP "mkdir -p /home/${{ parameters.admin_username }}/$APP_NAME"
+        sshpass -p "$(admin_password)" scp -o StrictHostKeyChecking=no -r $(Agent.TempDirectory)/app-files/* ${{ parameters.admin_username }}@$VM_IP:/home/${{ parameters.admin_username }}/$APP_NAME/ >/dev/null
         
         # Copy and run setup script
-        sshpass -p "$(admin_password)" scp -o StrictHostKeyChecking=no terraform/scripts/setup.sh $(admin_username)@$VM_IP:/tmp/setup.sh
-        sshpass -p "$(admin_password)" ssh -o StrictHostKeyChecking=no $(admin_username)@$VM_IP "echo '$(admin_password)' | sudo -S bash /tmp/setup.sh '$(app_name)' '$(admin_username)'"
+        sshpass -p "$(admin_password)" scp -o StrictHostKeyChecking=no terraform/scripts/setup.sh ${{ parameters.admin_username }}@$VM_IP:/tmp/setup.sh
+        sshpass -p "$(admin_password)" ssh -o StrictHostKeyChecking=no ${{ parameters.admin_username }}@$VM_IP "echo '$(admin_password)' | sudo -S bash /tmp/setup.sh '${{ parameters.app_name }}' '${{ parameters.admin_username }}'"
         
         echo "Application deployed successfully"
       displayName: 'Deploy Application to VM'
@@ -266,8 +296,8 @@ stages:
             echo "VM IP is empty or null, trying Azure CLI fallback..."
             
             # Try to find the VM and get its IP
-            echo "Searching for VMs with pattern: vm-flask-app-dev-ank"
-            VM_IP=$(az vm list-ip-addresses --query "[?contains(virtualMachine.name, 'vm-flask-app-dev-ank')].virtualMachine.network.publicIpAddresses[0].ipAddress" --output tsv 2>/dev/null | head -1)
+            echo "Searching for VMs with pattern: ${{ parameters.vm_name }}"
+            VM_IP=$(az vm list-ip-addresses --query "[?contains(virtualMachine.name, '${{ parameters.vm_name }}')].virtualMachine.network.publicIpAddresses[0].ipAddress" --output tsv 2>/dev/null | head -1)
             
             if [ -n "$VM_IP" ] && [ "$VM_IP" != "null" ]; then
               echo "Found VM IP via Azure CLI: $VM_IP"
