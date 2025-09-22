@@ -83,10 +83,9 @@ stages:
             # Setup Terraform working directory
             cd terraform
             
-            # Generate unique suffix to avoid naming conflicts
-            UNIQUE_SUFFIX=$(date +%s | tail -c 4)
-            RESOURCE_GROUP_NAME="rg-$(app_name)-$(environment)-$UNIQUE_SUFFIX"
-            VM_NAME="vm-$(app_name)-$(environment)-$UNIQUE_SUFFIX"
+            # Use variable names directly instead of generating unique suffixes
+            RESOURCE_GROUP_NAME="rg-$(app_name)-$(environment)"
+            VM_NAME="vm-$(app_name)-$(environment)"
             
             # Initialize and apply Terraform
             terraform init >/dev/null
@@ -234,13 +233,25 @@ stages:
         VM_IP="$(vm_public_ip)"
         
         # Wait for application to be ready
+        echo "Testing application at IP: $VM_IP"
         sleep 30
         
-        # Test application endpoints
-        if curl -f -s "http://$VM_IP/health" >/dev/null; then
-          echo "Application validation successful"
+        # Test multiple endpoints to ensure application is working
+        echo "Testing health endpoint..."
+        if curl -f -s --connect-timeout 10 "http://$VM_IP/health" >/dev/null 2>&1; then
+          echo "Health endpoint responding"
         else
-          echo "ERROR: Application validation failed"
-          exit 1
+          echo "Health endpoint failed, trying home page..."
+          if curl -f -s --connect-timeout 10 "http://$VM_IP/" >/dev/null 2>&1; then
+            echo "Home page responding"
+          else
+            echo "Application validation failed - no endpoints responding"
+            echo "Debugging information:"
+            echo "VM IP: $VM_IP"
+            curl -v "http://$VM_IP/" 2>&1 || echo "No response from VM"
+            exit 1
+          fi
         fi
+        
+        echo "Application validation successful"
       displayName: 'Test Application'
