@@ -2,14 +2,28 @@ trigger:
 - main
 
 variables:
+  # Application variables
   app_name: 'flask-app'
   admin_username: 'azureuser'
-  admin_password: 'TerraformDemo@2024!'
+  # admin_password will be retrieved from Azure DevOps secret variables
   environment: 'dev'
   location: 'East US'
   vm_size: 'Standard_B2s'
+  
+  # Resource naming variables (will override defaults)
+  resource_group_name: 'rg-flask-app-dev-ank'
+  vm_name: 'vm-flask-app-dev-ank'
+  
   # Azure service connection name
   serviceConnectionName: 'annkitsubserviceconnection'
+  
+  # Note: Azure authentication variables (client_id, client_secret, tenant_id, subscription_id)
+  # are automatically provided by the Azure DevOps service connection
+  
+  # IMPORTANT: Create a secret variable in Azure DevOps:
+  # 1. Go to Pipeline > Edit > Variables
+  # 2. Add variable: VM_ADMIN_PASSWORD (mark as secret)
+  # 3. Set the value to your VM admin password
 
 stages:
 # Validate Stage
@@ -58,6 +72,9 @@ stages:
 - stage: 'Deploy'
   displayName: 'Deploy Infrastructure'
   dependsOn: 'Setup'
+  variables:
+  - name: admin_password
+    value: $[variables.VM_ADMIN_PASSWORD]  # Reference to Azure DevOps secret variable
   
   jobs:
   - job: 'DeployInfrastructure'
@@ -83,11 +100,11 @@ stages:
             # Setup Terraform working directory
             cd terraform
             
-            # Use variable names directly instead of generating unique suffixes
-            RESOURCE_GROUP_NAME="rg-$(app_name)-$(environment)"
-            VM_NAME="vm-$(app_name)-$(environment)"
+            # Use pipeline variables directly (no dynamic generation)
+            RESOURCE_GROUP_NAME="$(resource_group_name)"
+            VM_NAME="$(vm_name)"
             
-            # Initialize and apply Terraform
+            # Initialize and apply Terraform with all variables
             terraform init >/dev/null
             
             terraform apply -auto-approve \
@@ -160,6 +177,7 @@ stages:
     vm_public_ip: $[ stageDependencies.Deploy.DeployInfrastructure.outputs['TerraformDeploy.vm_public_ip'] ]
     resource_group_name: $[ stageDependencies.Deploy.DeployInfrastructure.outputs['TerraformDeploy.resource_group_name'] ]
     vm_name: $[ stageDependencies.Deploy.DeployInfrastructure.outputs['TerraformDeploy.vm_name'] ]
+    admin_password: $[variables.VM_ADMIN_PASSWORD]  # Reference to Azure DevOps secret variable
   
   jobs:
   - job: 'DeployToVM'
