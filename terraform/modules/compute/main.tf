@@ -35,20 +35,5 @@ resource "azurerm_linux_virtual_machine" "vm" {
   tags = var.tags
 }
 
-# VM Extension for custom script execution
-resource "azurerm_virtual_machine_extension" "custom_script" {
-  name                 = "${var.vm_name}-script"
-  virtual_machine_id   = azurerm_linux_virtual_machine.vm.id
-  publisher            = "Microsoft.Azure.Extensions"
-  type                 = "CustomScript"
-  type_handler_version = "2.1"
-
-  settings = jsonencode({
-    "commandToExecute" = templatefile("${path.root}/scripts/setup.sh", {
-      app_name        = var.app_name
-      admin_username  = var.admin_username
-    })
-  })
-
-  tags = var.tags
-}
+# Note: Custom script execution moved to pipeline after file copy
+# This ensures application files are available before setup runs

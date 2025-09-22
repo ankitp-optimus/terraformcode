@@ -77,8 +77,3 @@ variable "source_image_version" {
   type        = string
   default     = "latest"
 }
-
-variable "app_name" {
-  description = "Name of the application"
-  type        = string
-}
